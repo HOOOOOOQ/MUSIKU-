@@ -152,6 +152,143 @@ describe('session security regressions (fake database)', () => {
   });
 });
 
+/**
+ * Refresh-token rotation families and reuse detection.
+ *
+ * These run against the in-memory fake models, so the exact grace-window logic
+ * in `authService.refresh` is exercised without a live database. The live
+ * behaviour against MongoDB Atlas lives in `tests/atlas/atlasIntegration.test.ts`.
+ */
+describe('refresh token reuse detection (fake database)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const models = require('../../src/models');
+  const email = 'reuse@example.com';
+  const password = 'reusePassword123';
+
+  /**
+   * Registers a dedicated account and returns the refresh token of the login
+   * session plus its rotation `family`, so assertions can be scoped to that
+   * chain (registration issues its own session in its own family).
+   */
+  async function loginFresh(suffix: string): Promise<{ userId: string; refreshToken: string; family: string }> {
+    const registered = await request(app)
+      .post('/api/auth/register')
+      .send({ email, username: `reuse_${suffix}`, password, displayName: 'Reuse Probe' });
+    expect([201, 409]).toContain(registered.status);
+    const login = await request(app).post('/api/auth/login').send({ email, password });
+    expect(login.status).toBe(200);
+
+    const payload = (login.body.data.user ?? registered.body?.data?.user ?? {}) as Record<string, unknown>;
+    const userId = String(payload._id ?? payload.id ?? '');
+    expect(userId).not.toBe('');
+    const tokens = login.body.data.tokens as { accessToken: string; refreshToken: string };
+
+    // The access token carries `sid`, the session document id, so the login
+    // session is identified exactly instead of guessing from document order.
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.decode(tokens.accessToken) as { sid?: string } | null;
+    expect(decoded?.sid).toBeTruthy();
+    const loginSession = (await models.UserSession.findById(String(decoded?.sid))) as Record<string, any> | null;
+    expect(loginSession).not.toBeNull();
+    expect(String(loginSession!.user)).toBe(userId);
+    expect(loginSession!.revokedAt).toBeUndefined();
+    expect(loginSession!.refreshTokenHash).toBeTruthy();
+
+    return { userId, refreshToken: tokens.refreshToken, family: String(loginSession!.family) };
+  }
+
+  async function sessionsInFamily(userId: string, family: string): Promise<Array<Record<string, any>>> {
+    return models.UserSession.find({ user: userId, family }).sort({ createdAt: 1 });
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('rotates within one family and rejects a replay inside the grace window without revoking the family', async () => {
+    const first = await loginFresh('grace');
+    const rotated = await request(app).post('/api/auth/refresh').send({ refreshToken: first.refreshToken });
+    expect(rotated.status).toBe(200);
+    const rotatedRefresh = rotated.body.data.refreshToken as string;
+    expect(rotatedRefresh).not.toBe(first.refreshToken);
+
+    // A concurrent tab / retried network call re-sends the already-consumed token.
+    const replay = await request(app).post('/api/auth/refresh').send({ refreshToken: first.refreshToken });
+    expect(replay.status).toBe(401);
+
+    // The legitimately rotated session must survive a benign replay.
+    const stillWorks = await request(app).post('/api/auth/refresh').send({ refreshToken: rotatedRefresh });
+    expect(stillWorks.status).toBe(200);
+
+    const family = await sessionsInFamily(first.userId, first.family);
+    // login session (consumed) + first rotation (consumed by the second refresh) + live session.
+    expect(family.length).toBe(3);
+    expect(family.every((session) => session.family === first.family)).toBe(true);
+    const consumed = family.filter((session) => session.revokedReason === 'rotated');
+    expect(consumed.length).toBe(2);
+    expect(consumed.every((session) => session.rotatedAt !== undefined)).toBe(true);
+    const live = family.filter((session) => session.revokedAt === undefined);
+    expect(live.length).toBe(1);
+    // A benign replay must never be recorded as theft.
+    expect(family.filter((session) => session.revokedReason === 'reuse_detected')).toEqual([]);
+  });
+
+  it('revokes the whole rotation family when a consumed token replays after the grace window', async () => {
+    const first = await loginFresh('theft');
+    const rotated = await request(app).post('/api/auth/refresh').send({ refreshToken: first.refreshToken });
+    expect(rotated.status).toBe(200);
+    const rotatedRefresh = rotated.body.data.refreshToken as string;
+
+    // Simulate the theft being noticed well after REFRESH_REUSE_GRACE_MS.
+    const realNow = Date.now();
+    jest.spyOn(Date, 'now').mockImplementation(() => realNow + 120_000);
+
+    const replay = await request(app).post('/api/auth/refresh').send({ refreshToken: first.refreshToken });
+    expect(replay.status).toBe(401);
+    jest.restoreAllMocks();
+
+    // Containment: the newer token issued to the legitimate device is also dead.
+    const rotatedNowFails = await request(app).post('/api/auth/refresh').send({ refreshToken: rotatedRefresh });
+    expect(rotatedNowFails.status).toBe(401);
+
+    const family = await sessionsInFamily(first.userId, first.family);
+    expect(family.length).toBe(2);
+    expect(family.filter((session) => session.revokedReason === 'reuse_detected').length).toBe(1);
+    expect(family.every((session) => session.revokedAt !== undefined)).toBe(true);
+
+    // The access token of the revoked session no longer authenticates.
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${rotated.body.data.accessToken as string}`);
+    expect(me.status).toBe(401);
+  });
+
+  it('treats a logout-revoked token as reuse instead of a benign replay', async () => {
+    const first = await loginFresh('logout');
+    const logout = await request(app).post('/api/auth/logout').send({ refreshToken: first.refreshToken });
+    expect([200, 204]).toContain(logout.status);
+
+    const replay = await request(app).post('/api/auth/refresh').send({ refreshToken: first.refreshToken });
+    expect(replay.status).toBe(401);
+
+    const family = await sessionsInFamily(first.userId, first.family);
+    const loggedOut = family.find((session) => session.revokedReason === 'logout');
+    expect(loggedOut).toBeDefined();
+    expect(family.every((session) => session.revokedAt !== undefined)).toBe(true);
+    // A logout replay must not resurrect or issue anything.
+    expect(family.length).toBe(1);
+  });
+
+  it('rejects a refresh token signed with the access-token secret', async () => {
+    const first = await loginFresh('cross');
+    const jwt = await import('jsonwebtoken');
+    const { env } = await import('../../src/config/env');
+    const forged = jwt.sign({ sub: first.userId, sid: 'forged' }, env.JWT_SECRET, { expiresIn: '1h' });
+    const response = await request(app).post('/api/auth/refresh').send({ refreshToken: forged });
+    expect(response.status).toBe(401);
+  });
+});
+
 describe('public authentication capabilities', () => {
   it('reports Google as unavailable without backend credentials and leaks no secret', async () => {
     const response = await request(app).get('/api/auth/providers');

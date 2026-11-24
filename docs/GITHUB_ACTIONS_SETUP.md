@@ -1,66 +1,110 @@
-# GitHub Actions and Android artifacts
+# GitHub Actions setup — MUSIKU+
 
-## Repository Secrets
+Two workflows run on this repository:
 
-Open `HOOOOOOQ/MUSIKU-` on GitHub → **Settings → Secrets and variables → Actions → Secrets → New repository secret**.
+| Workflow | File | Jobs |
+|---|---|---|
+| **Android APK** | `.github/workflows/android-build.yml` | `config-audit`, `backend`, `atlas-integration`, `admin`, `android` (debug APK, optional signed release) |
+| **Verify MUSIKU+** | `.github/workflows/verify.yml` | `backend`, `admin` (Node-only gate, kept for fast feedback) |
 
-Add these only in GitHub's secret UI or an approved local secret-management process:
+Both trigger on pushes to `main`, on pull requests, and manually via `workflow_dispatch`. The Android workflow uses a concurrency group (`android-${{ github.ref }}`, `cancel-in-progress: true`), so pushing a new commit cancels the superseded run.
+
+## 1. Secrets that already exist
+
+These five repository secrets are **already configured** for `HOOOOOOQ/MUSIKU-`. Do not recreate or rename them; GitHub never reveals a stored value, and no value is printed by any workflow step.
+
+| Secret | Consumed by | Purpose |
+|---|---|---|
+| `MONGODB_URI` | `atlas-integration` job only | Atlas connection string for the pre-flight probe and the live integration suite |
+| `JWT_SECRET` | `atlas-integration` job only | Access-token signing key used by the integration suite |
+| `JWT_REFRESH_SECRET` | `atlas-integration` job only | Refresh-token signing key (must differ from `JWT_SECRET`) |
+| `GOOGLE_CLIENT_ID` | `config-audit` (presence/shape check only) | Android OAuth client ID |
+| `GOOGLE_WEB_CLIENT_ID` | `config-audit`, and `android` as a public build-time define | Web OAuth client ID = ID-token audience verified by the backend |
+
+How workflows consume them: per-step `env:` mapping with `${{ secrets.NAME }}`, scoped to the job that needs it. `MONGODB_URI`, `JWT_SECRET` and `JWT_REFRESH_SECRET` are **never** passed to `--dart-define` and never reach the Flutter or admin jobs.
+
+Optional secrets, added later if needed:
 
 | Secret | Purpose |
 |---|---|
-| ANDROID_KEYSTORE_BASE64 | Base64 of your existing Android release keystore |
-| ANDROID_KEYSTORE_PASSWORD | Keystore password |
-| ANDROID_KEY_ALIAS | Existing key alias |
-| ANDROID_KEY_PASSWORD | Private key password |
+| `ANDROID_KEYSTORE_BASE64` | Base64 of an existing release keystore |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias |
+| `ANDROID_KEY_PASSWORD` | Key password |
+| `GOOGLE_CLIENT_SECRET` | Reserved for a future server-side authorization-code flow (backend only) |
+| `GITHUB_BUILD_TOKEN` | Fine-grained Actions-read token for the admin build-status panel |
+| `PAYMENT_SECRET_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_PASSWORD`, `ADMIN_PASSWORD` | Deploy-time secrets for the backend host; used in CI only by the APK leak scan |
 
-Do not send values in chat, put them in workflow YAML, or commit a keystore. Generate/choose release signing material under your organization's custody; this implementation does not invent a signing identity. Base64 is encoding, not encryption. Keep an offline backup of release signing material.
+Repository **variables** (public build configuration, not secrets):
 
-Release signing runs only on non-PR events when all four secrets are present. PRs, including fork PRs, build debug only. On push to main or manual dispatch with secrets, the workflow decodes the keystore under RUNNER_TEMP with restricted permissions, writes escaped Java-properties configuration, builds release and cleans both files on success or failure. Only exact APK paths are uploaded, never keystores. Passwords are not printed. GitHub's normal secret-masking remains enabled.
+| Variable | Purpose |
+|---|---|
+| `API_BASE_URL` (or legacy `API_URL`) | HTTPS backend origin ending in `/api`, baked into the APK |
+| `GOOGLE_WEB_CLIENT_ID` | Optional fallback when the value is stored as a variable instead of a secret |
 
-## Repository Variables (public build configuration)
+Without `API_BASE_URL`/`API_URL` the APK embeds the deliberately non-functional `https://api.example.invalid/api` default and cannot reach a backend. Without a web client ID the Google button is hidden.
 
-Under **Secrets and variables → Actions → Variables**, add:
+## 2. How each job uses configuration
 
-- `API_URL`: reachable HTTPS backend origin ending in `/api`.
-- `GOOGLE_WEB_CLIENT_ID`: Google **Web** OAuth client ID, matching backend `GOOGLE_CLIENT_ID`.
+- **`config-audit`** runs `scripts/audit_ci_config.py`. It reports *presence and shape only* — `present`, `missing`, `placeholder`, `invalid scheme`, `meets 32-character minimum`, `access and refresh use different keys` — and writes GitHub outputs (`atlas_ready`, `google_ready`, `jwt_ready`, `signing_ready`, `api_base_url_ready`, `all_required_ready`). No value is echoed, stored, uploaded or exposed. On `push`/`workflow_dispatch` (`STRICT=true`) it fails when a required item is missing; on pull requests it stays informational so fork PRs are not blocked.
+- **`backend`** — `npm ci`, TypeScript build, hermetic test suite (fake persistence, no secrets needed), `npm audit --omit=dev --audit-level=high`.
+- **`atlas-integration`** — the only job that receives `MONGODB_URI`/`JWT_SECRET`/`JWT_REFRESH_SECRET`. It runs `npm run test:atlas:integration`: first `scripts/atlas-preflight.ts` probes Atlas, then Jest runs the live suite. It writes to the isolated database `musiku_plus_ci_test` (`MONGODB_TEST_DB_NAME`), never to production data, and deletes everything it creates. When Atlas is unreachable, unauthorized for that database, or unconfigured, the pre-flight records the reason and the suite is reported as **skipped** — a skip is never presented as a pass.
+- **`admin`** — `npm ci`, tests, production build, dependency audit.
+- **`android`** — `needs: [backend, admin]`, so no APK is built when a mandatory gate failed. Steps: Java 17 (Temurin), Flutter stable, `flutter pub get`, `dart format --output=none --set-exit-if-changed lib test`, `flutter analyze`, `flutter test`, `flutter build apk --debug` with `--dart-define=API_BASE_URL=…` and `--dart-define=GOOGLE_WEB_CLIENT_ID=…`, an APK secret scan, APK metadata (size + SHA-256), and the artifact upload.
 
-These are public in the APK; do not put passwords, Atlas URIs, Google client secrets, payment or provider secret keys here. Without API_URL, a debug APK may compile using `https://api.example.invalid/api` but cannot contact a production backend. Without GOOGLE_WEB_CLIENT_ID, Google login is hidden.
+## 3. Running a workflow manually
 
-## Backend environment is separate
+1. GitHub → **Actions** → **Android APK** (or **Verify MUSIKU+**) → **Run workflow**.
+2. Choose the branch (for release signing, `main`) and run it.
+3. A workflow file must exist on the default branch before GitHub offers manual dispatch for it; pull-request events exercise it before merge.
 
-Set Atlas, JWT, SMTP, provider and payment secrets on the backend hosting service, not in Flutter GitHub build variables. `backend/.env.example` is the inventory. Never use `NEXT_PUBLIC_` prefixes for these secrets. The admin uses the same backend via its server-side `BACKEND_URL` rewrite.
+## 4. Reading results and downloading artifacts
 
-## Run and download
+1. Open the run. Every job shows per-step conclusions; a green run means the steps really executed.
+2. The run's **Summary** page contains: the configuration audit table, the Atlas pre-flight outcome, debug APK path/size/SHA-256, whether `API_BASE_URL` and `GOOGLE_WEB_CLIENT_ID` were baked in, the APK secret-scan result, and the release-signing status.
+3. Download **`musiku-plus-debug-apk`** from the **Artifacts** section of a successful run (a ZIP containing `app-debug.apk`). With signing configured on a non-PR run, **`musiku-plus-release-apk`** also appears.
+4. Artifact output paths in the workspace: `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`.
+5. A failed run uploads **`musiku-plus-android-build-logs`** (`mobile/ci-logs/*.log`: toolchain, pub get, format, analyze, tests, build). `scripts/ci_notice.py` also emits an annotation anchored at the failing test or the Gradle `FAILURE` block, because GitHub truncates long annotations and keeps the head.
 
-`.github/workflows/android-build.yml` triggers on main pushes, pull requests, and `workflow_dispatch`.
+## 5. Release signing (optional, added later)
 
-1. Open **Actions → Android APK → Run workflow**, select the intended branch and run. New workflows must be merged to the default branch before GitHub exposes them for normal manual dispatch; PR events can test them before merge.
-2. Open the run. Wait for package resolution, format check, analysis, tests and APK build/upload to complete. A created run is not a successful build.
-3. Download **musiku-plus-debug-apk** from the successful run's **Artifacts** section. If signing was configured on a non-PR run, download **musiku-plus-release-apk** too. Artifacts are ZIP containers holding APK files.
-4. A failure uploads **musiku-plus-android-build-logs** when logs exist. Logs contain toolchain/package/test output, not intentionally printed signing values.
+Add all four `ANDROID_*` secrets in one go; the release path activates only when every one is present **and** the event is not a pull request (fork PRs cannot read secrets).
 
-Build outputs: `mobile/build/app/outputs/flutter-apk/`. Installation is permitted only after trusting the APK source; a debug artifact is not a signed production distribution. Debug keystores may vary between runners: use/register a stable organization-managed development certificate for repeatable OAuth testing, or use a properly configured release certificate.
+1. Repository → **Settings → Secrets and variables → Actions → Secrets → New repository secret**.
+2. Add `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+3. Run the workflow on `main` (push or `workflow_dispatch`).
+4. `scripts/configure_signing.py` decodes the keystore to `$RUNNER_TEMP/musiku-release.jks` with `0600` permissions under `umask 077`, writes an escaped `mobile/android/key.properties`, and both files are removed by a `trap` and by an `if: always()` cleanup step.
+5. Only the exact APK path is uploaded. Keystores, `key.properties` and passwords are never artifacts and never printed; GitHub's secret masking stays on.
 
-## GitHub Release
+Guarantees in `mobile/android/app/build.gradle.kts`:
 
-Only after a successful signed build and device testing: open **Releases → Draft a new release**, select an approved tag/commit, attach the verified release APK, include checksums/test results and publish according to repository policy. This workflow does not automatically publish releases or tags.
+- Release signing comes **only** from that owner-supplied material. The debug keystore is deliberately **not** a fallback, so an unsigned build can never be mistaken for a distributable release.
+- Without `key.properties`, no release signing config exists and CI simply skips the release steps, marking release as not configured. No signing key is generated by the pipeline.
+- `.gitignore` excludes `*.jks`, `*.keystore`, `key.properties` and `local.properties`.
 
-## Current status (2026-11-24)
+Base64 is encoding, not encryption. Keep an offline backup of release signing material; losing it means losing the ability to update the app.
 
-The Android workflow has been executed on GitHub and passed: run [45348016082](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082) produced artifact **musiku-plus-debug-apk** (84,320,526 bytes) with `flutter analyze` reporting "No issues found" and all 18 `flutter test` tests passing. Release steps were skipped because the four signing secrets are absent and the event was a pull request — **no signed release APK exists yet**. The `verify.yml` Node workflow passed on the same commit: run [45348016205](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205), and it has been green on every commit of this branch. On failure, `scripts/ci_notice.py` anchors the emitted annotation at the failing test/`FAILURE` marker so the useful part survives GitHub's annotation truncation. Neither `API_URL` nor `GOOGLE_WEB_CLIENT_ID` was configured, so that debug artifact embeds the nonfunctional default API origin and hides the Google button.
+## 6. Creating a GitHub Release
 
-## Troubleshooting
+Only after a successful **signed** build and device testing: **Releases → Draft a new release**, pick an approved tag/commit, attach the verified `app-release.apk`, and include the SHA-256 from the run summary plus the test results. No workflow publishes releases or tags automatically.
 
-- **Format failure**: run `dart format lib test`, commit changes, rerun. CI checks do not silently rewrite source.
-- **Analyze/test failure**: inspect the failing step and diagnostic logs; fix source, don't skip checks.
-- **No artifact**: build or upload did not succeed. Check run conclusion and output existence, not just workflow presence.
-- **Release skipped**: missing/partial signing secrets or PR event. Debug should still run.
-- **Keystore alias/password**: validate locally using keytool; do not echo secret values in CI.
-- **OAuth error**: verify package name, exact certificate SHA and Web audience; see GOOGLE_OAUTH_SETUP.md.
-- **Gradle `Script compilation errors` about AGP/Gradle/Kotlin versions**: Flutter stable enforces minimums (currently AGP 9.3.1, Gradle 9.5.0, Kotlin 2.4.20, Java 17). Keep `mobile/android/settings.gradle.kts`, `gradle/wrapper/gradle-wrapper.properties` and `app/build.gradle.kts` aligned; do not downgrade to silence the checker.
-- **`Unresolved reference 'util'` in `build.gradle.kts`**: the Gradle `java` extension shadows the `java.util` package in Kotlin DSL scripts. Add `import java.util.Properties` at the top of the script instead of writing `java.util.Properties()` inline.
-- **`VideoPlayerController.seek` undefined**: the video_player API is `seekTo(Duration)`; analyzer errors like this stop the build before Gradle runs, so fix source rather than relaxing analysis.
-- **Actions disabled/billing/approval**: repository owner must enable/approve Actions and provide runner capacity. Automation in this repository cannot read or write secrets/variables (`403 Resource not accessible by integration`) and cannot cancel runs; concurrency groups cancel superseded runs instead.
-- **API 403 for secrets/variables**: automation may lack administrative permission. Owner must configure via Settings; do not share secret values with the agent.
+## 7. Troubleshooting
 
-The general `verify.yml` independently runs backend build/tests and admin tests/build. A green Node job is not proof that the Android workflow passed.
+- **Format failure**: run `dart format lib test` locally, commit, rerun. CI never rewrites source silently.
+- **Analyze failure**: the analyzer emits one annotation per line; fix the source rather than relaxing analysis. Known Flutter-version-sensitive items are handled with narrowly scoped `// ignore:` comments and an explanatory note.
+- **Test failure**: read the `Flutter tests` annotation (anchored at the failing test) or download `musiku-plus-android-build-logs`.
+- **Gradle `Script compilation errors` about versions**: Flutter stable enforces minimums (currently AGP 9.3.1, Gradle 9.5.0, Kotlin 2.4.20, Java 17). Keep `mobile/android/settings.gradle.kts`, `gradle/wrapper/gradle-wrapper.properties` and `app/build.gradle.kts` aligned; never downgrade to silence the checker.
+- **`Unresolved reference 'util'` in `build.gradle.kts`**: the Gradle `java` extension shadows the `java.util` package in Kotlin DSL. Add `import java.util.Properties` at the top of the script.
+- **Atlas suite skipped**: read the `Atlas integration outcome` section of the job summary. Typical reasons: `MONGODB_URI` missing/placeholder; Atlas IP access list does not include GitHub runner addresses; DNS/network blocked; the database user is not authorized on `musiku_plus_ci_test` (grant `readWrite` on it, or set `MONGODB_TEST_DB_NAME` to a database the user may use). A skip is a real result, not a pass.
+- **APK secret scan fails**: something backend-only was embedded in the app. Fix the build configuration — never weaken the scan.
+- **Release steps skipped**: missing/partial signing secrets, or a pull-request event. The debug artifact is still produced.
+- **OAuth `developer_error 10`**: package name, SHA-1 or web client mismatch — see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md). A CI debug APK is signed with the runner's ephemeral debug key, which is normally not registered in your Google project.
+- **`403 Resource not accessible by integration`** when automation tries to list secrets/variables or cancel runs: the installation lacks administrative permission. Configure secrets through the web UI; a superseded run is cancelled by the concurrency group instead.
+- **Actions disabled / billing / approval**: the repository owner must enable Actions and provide runner capacity.
+
+## 8. Secret hygiene rules used here
+
+- Never `echo` a secret, never print an environment value, never write one to a file that is uploaded.
+- Never put a secret in workflow YAML, source code, `--dart-define`, `NEXT_PUBLIC_*`, or a committed `.env`.
+- Never send a secret value through chat, an issue, a PR description or a screenshot. GitHub cannot show a stored value back; if a value was ever shared outside the secret store, **rotate it** — deleting a file from the latest commit does not remove it from Git history.
+- Backend-only secrets stay in the backend job and on the backend host. The APK contains at most a public API origin and a public web client ID, and `scripts/scan_apk_secrets.py` verifies that on every build.
