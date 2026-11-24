@@ -1,10 +1,10 @@
-/// Animeku tests.
-///
-/// Two layers, both hermetic:
-///  * pure helpers (payload normalization, schedule day picking, resume logic,
-///    error classification, route building, duration formatting);
-///  * widget tests over the real screens with a fake `Api`, so no HTTP request
-///    ever leaves the test and no MongoDB/Animasu access is needed.
+// Animeku tests.
+//
+// Two layers, both hermetic:
+//  * pure helpers (payload normalization, schedule day picking, resume logic,
+//    error classification, route building, duration formatting);
+//  * widget tests over the real screens with a fake `Api`, so no HTTP request
+//    ever leaves the test and no MongoDB/Animasu access is needed.
 // Material compatibility export retained for supported Flutter stable versions.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
