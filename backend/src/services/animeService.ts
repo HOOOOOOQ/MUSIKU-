@@ -33,6 +33,10 @@ const SOURCE = 'animasu';
 
 export interface SerializedAnime {
   id: string;
+  /** Mongo id under the legacy key as well, so existing clients keep working. */
+  _id: string;
+  /** Provider-relative link, exposed for `source:providerId` style references. */
+  providerId: string;
   title: string;
   link: string;
   posterUrl: string;
@@ -50,10 +54,14 @@ export interface SerializedAnime {
 
 function serializeAnime(doc: Record<string, unknown> & { _id: unknown }): SerializedAnime {
   const latestNumber = doc.latestEpisodeNumber;
+  const id = String(doc._id);
+  const providerId = String(doc.providerId ?? '');
   return {
-    id: String(doc._id),
+    id,
+    _id: id,
+    providerId,
     title: String(doc.title ?? ''),
-    link: doc.source === SOURCE ? String(doc.providerId ?? '') : '',
+    link: doc.source === SOURCE ? providerId : '',
     posterUrl: String(doc.posterUrl ?? ''),
     synopsis: String(doc.synopsis ?? ''),
     type: String(doc.format ?? ''),

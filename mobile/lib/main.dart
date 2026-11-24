@@ -13,6 +13,9 @@ import 'features/playlists.dart';
 import 'features/premium.dart';
 import 'core/audio.dart';
 import 'features/screens.dart';
+import 'features/animeku.dart';
+import 'features/animeku_detail.dart';
+import 'features/animeku_player.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,6 +78,36 @@ final router = GoRouter(
       builder: (_, state) => DetailScreen(
         kind: state.pathParameters['kind']!,
         id: state.pathParameters['id']!,
+      ),
+    ),
+    // ── Animeku (anime section; provider "Animasu" stays backend-internal) ──
+    GoRoute(path: '/animeku', builder: (_, __) => const AnimekuHomeScreen()),
+    GoRoute(
+      path: '/animeku/search',
+      builder: (_, __) => const AnimekuSearchScreen(),
+    ),
+    GoRoute(
+      path: '/animeku/list',
+      builder: (_, state) => AnimekuListScreen(
+        kind: state.uri.queryParameters['kind'] ?? 'ongoing',
+        title: state.uri.queryParameters['title'] ?? '',
+        type: state.uri.queryParameters['type'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/animeku/anime',
+      builder: (_, state) => AnimekuDetailScreen(
+        // Provider links contain slashes, so they travel as query parameters.
+        link: state.uri.queryParameters['link'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/animeku/watch',
+      builder: (_, state) => AnimekuPlayerScreen(
+        link: state.uri.queryParameters['link'] ?? '',
+        episodeUrl: state.uri.queryParameters['episodeUrl'] ?? '',
+        episodeNumber:
+            int.tryParse(state.uri.queryParameters['number'] ?? '') ?? 0,
       ),
     ),
     GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),

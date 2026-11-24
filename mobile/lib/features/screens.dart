@@ -11,6 +11,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:video_player/video_player.dart';
 import '../core/api.dart';
 import '../core/audio.dart';
+import 'animeku.dart' show animekuDetailRoute;
 
 Future<void> action(
   BuildContext context,
@@ -62,29 +63,38 @@ void resource(BuildContext context, String title, String path) => context.push(
   ).toString(),
 );
 
+/// Routes of the five primary tabs, in navigation order.
+const List<String> tabRoutes = ['/', '/browse/music', '/animeku', '/library', '/profile'];
+
+/// App shell: app bar, content and the five-tab bottom navigation
+/// (Home, Explore, Animeku, Library, Profile). `index` marks the active tab so
+/// the selected destination follows the screen the user is actually on.
 class Frame extends StatelessWidget {
   final String title;
   final Widget child;
   final List<Widget>? actions;
+  final int index;
   const Frame({
     super.key,
     required this.title,
     required this.child,
     this.actions,
+    this.index = 0,
   });
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(title), actions: actions),
-    body: child,
+    body: SafeArea(top: false, child: child),
     bottomNavigationBar: NavigationBar(
-      selectedIndex: 0,
-      onDestinationSelected: (i) => context.go(
-        ['/', '/browse/music', '/browse/anime', '/library', '/profile'][i],
-      ),
+      selectedIndex: index.clamp(0, tabRoutes.length - 1),
+      onDestinationSelected: (i) => context.go(tabRoutes[i]),
       destinations: const [
         NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-        NavigationDestination(icon: Icon(Icons.music_note), label: 'Music'),
-        NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Anime'),
+        NavigationDestination(
+          icon: Icon(Icons.explore_outlined),
+          label: 'Explore',
+        ),
+        NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Animeku'),
         NavigationDestination(
           icon: Icon(Icons.library_music),
           label: 'Library',
@@ -430,7 +440,8 @@ class BrowseScreen extends StatelessWidget {
   Widget build(BuildContext context) => DefaultTabController(
     length: 3,
     child: Frame(
-      title: kind == 'music' ? 'Music' : 'Anime',
+      title: kind == 'music' ? 'Explore' : 'Anime',
+      index: kind == 'music' ? 1 : 2,
       child: Column(
         children: [
           const TabBar(
@@ -487,6 +498,7 @@ class _SearchState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) => Frame(
     title: 'Cari',
+    index: 1,
     child: Column(
       children: [
         Padding(
@@ -536,6 +548,7 @@ class DetailScreen extends ConsumerWidget {
     final path = kind == 'music' ? '/music/tracks/$id' : '/anime/$id';
     return Frame(
       title: kind == 'music' ? 'Track' : 'Anime',
+      index: kind == 'music' ? 1 : 2,
       child: Remote(
         path: path,
         builder: (data) {
@@ -631,6 +644,17 @@ class DetailScreen extends ConsumerWidget {
                   child: const Text('Lirik'),
                 ),
               ] else ...[
+                // Titles synced from the Animeku provider open the full Animeku
+                // detail screen (episodes, schedule, watch progress).
+                if ((item['source'] ?? '').toString() == 'animasu' &&
+                    (item['providerId'] ?? '').toString().isNotEmpty)
+                  FilledButton.icon(
+                    onPressed: () => context.push(
+                      animekuDetailRoute((item['providerId'] ?? '').toString()),
+                    ),
+                    icon: const Icon(Icons.smart_display_outlined),
+                    label: const Text('Buka di Animeku'),
+                  ),
                 FilledButton.icon(
                   onPressed: () => action(
                     context,
@@ -679,6 +703,7 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => Frame(
     title: 'Library',
+    index: 3,
     actions: [
       IconButton(
         tooltip: 'Buat playlist',
@@ -772,6 +797,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => Frame(
     title: 'Profil & Pengaturan',
+    index: 4,
     child: ListView(
       children: [
         ListTile(

@@ -26,6 +26,10 @@ jobs:
     name: Android debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # `contents: write` is used by exactly one step: the canonical Dart format
+    # commit (see "Format Dart sources"). Nothing else in this job pushes.
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: mobile
@@ -37,6 +41,9 @@ jobs:
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history so the format fix-up commit can rebase and push.
+          fetch-depth: 0
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -51,8 +58,34 @@ jobs:
           set -o pipefail
           flutter --version | tee ci-logs/toolchain.log
           flutter pub get 2>&1 | tee ci-logs/pub-get.log
-      - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test 2>&1 | tee ci-logs/format.log
+      # Canonical formatting is enforced, and on a push run the formatter also
+      # heals the branch: `dart format` is deterministic, so committing its
+      # output cannot change behaviour. The fix-up commit carries [skip ci] so
+      # it neither re-triggers this workflow nor cancels the running job
+      # through the concurrency group. On pull-request runs (possibly from a
+      # fork, where the token cannot push) unformatted sources fail the build.
+      - name: Format Dart sources
+        run: |
+          set -o pipefail
+          dart format lib test 2>&1 | tee ci-logs/format.log
+          if [[ -z "$(git status --porcelain lib test)" ]]; then
+            echo "::notice title=Dart format::PASS - lib and test are canonically formatted"
+            dart format --output=none --set-exit-if-changed lib test
+            exit 0
+          fi
+          changed=$(git status --porcelain lib test | awk '{print $2}' | tr '\n' ' ')
+          if [[ "${{ github.event_name }}" != "push" ]]; then
+            echo "::error title=Dart format::not dart-format clean and cannot be fixed on a ${{ github.event_name }} run: $changed"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib test
+          git commit -m "style(mobile): apply dart format ($changed) [skip ci]"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          echo "::notice title=Dart format::reformatted and pushed a [skip ci] style commit: $changed"
+          dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: |
           set +e
