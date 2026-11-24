@@ -253,8 +253,9 @@ class _AuthState extends ConsumerState<AuthScreen> {
                                 );
                             if (context.mounted) context.go('/');
                           } catch (e) {
-                            if (mounted)
+                            if (mounted) {
                               setState(() => error = errorMessage(e));
+                            }
                           } finally {
                             if (mounted) setState(() => busy = false);
                           }
