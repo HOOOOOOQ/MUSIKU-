@@ -34,8 +34,17 @@ def main() -> int:
         print(__doc__)
         return 2
 
-    log = read(sys.argv[1])
-    preflight_path = sys.argv[2] if len(sys.argv) > 2 else "tests/atlas/preflight.json"
+    try:
+        return report(sys.argv)
+    except Exception as error:  # never let the reporter mask the suite result
+        detail = f"{type(error).__name__}: {error}"
+        print(f"::error title=Atlas report::{detail}")
+        return 0
+
+
+def report(argv: list[str]) -> int:
+    log = read(argv[1])
+    preflight_path = argv[2] if len(argv) > 2 else "tests/atlas/preflight.json"
     preflight: dict = {}
     try:
         preflight = json.loads(read(preflight_path) or "{}")
@@ -53,7 +62,7 @@ def main() -> int:
     tests = summaries.get("Tests", "not captured")
     skip_title = SKIP_TITLE_RE.search(log)
     skip_reason = skip_title.group(1).strip() if skip_title else ""
-    suite_lines = [line.strip() for line in FAIL_RE.findall(log)]
+    suite_lines = [f"{match.group(1)} {match.group(2).strip()}" for match in FAIL_RE.finditer(log)]
 
     if available:
         headline = f"Atlas integration ran LIVE against {preflight.get('testDatabase') or 'the configured test database'}"
