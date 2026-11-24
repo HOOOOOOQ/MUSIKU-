@@ -1,7 +1,7 @@
 # MUSIKU+ — Final implementation report
 
 Date: 2026-11-24 · Branch: `arena/47dd4ee9-musiku` · Pull request: https://github.com/HOOOOOOQ/MUSIKU-/pull/2
-Code commit verified in CI: `6ff9008` · This report records **executed** results, not intentions.
+Code commit verified in CI: `e2917e7` · This report records **executed** results, not intentions.
 
 ## Verdict
 
@@ -13,7 +13,7 @@ Everything below distinguishes three states: **verified** (executed and observed
 
 ### 1.1 GitHub Actions — Android APK (`.github/workflows/android-build.yml`)
 
-Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617 (commit `6ff9008`, `pull_request` event) — **conclusion: success**.
+Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082 (commit `e2917e7`, `pull_request` event) — **conclusion: success**.
 
 | Step | Result |
 |---|---|
@@ -21,9 +21,9 @@ Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617 (commit `6ff90
 | Resolve packages (`flutter pub get`) | success |
 | Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success |
 | Analyze (`flutter analyze`) | success — **"No issues found! (ran in 6.6s)"** |
-| Test (`flutter test`) | success — **17 tests** across 8 files |
+| Test (`flutter test`) | success — **18 tests** across 8 files |
 | Build debug APK (`flutter build apk --debug`) | success — `mobile/build/app/outputs/flutter-apk/app-debug.apk` asserted non-empty |
-| Upload artifact `musiku-plus-debug-apk` | success — **84,329,106 bytes** (ZIP container, `if-no-files-found: error`) |
+| Upload artifact `musiku-plus-debug-apk` | success — **84,320,526 bytes** (ZIP container, `if-no-files-found: error`) |
 | Check signing availability | success — `ready=false` (no signing secrets, PR event) |
 | Build signed release APK / upload `musiku-plus-release-apk` | **skipped — release signing is not configured** |
 | Remove signing material / Upload diagnostic logs | success / skipped (no failure) |
@@ -39,14 +39,14 @@ Caveats that matter before installing that APK:
 
 ### 1.2 GitHub Actions — backend/admin (`.github/workflows/verify.yml`)
 
-Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204565 (commit `6ff9008`) — **success**. Jobs: `backend` (Node 22, `npm ci`, `npm run build`, `npm test` — 145 tests) and `admin` (Node 22, `npm ci`, `npm test`, `npm run build`). This workflow has been green on every commit of this branch: 45344818574, 45344330595, 45343933406, 45343054471, 45342691383, 45342291387, 45340616814, 45340564425, 45339850139, 45339775589, 45339330154.
+Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205 (commit `e2917e7`) — **success**. Jobs: `backend` (Node 22, `npm ci`, `npm run build`, `npm test` — 146 tests) and `admin` (Node 22, `npm ci`, `npm test`, `npm run build`). This workflow has been green on every commit of this branch, including 45348016205 for `e2917e7`: 45345204565, 45344818574, 45344330595, 45343933406, 45343054471, 45342691383, 45342291387, 45340616814, 45340564425, 45339850139, 45339775589, 45339330154.
 
 ### 1.3 Local execution in this sandbox
 
 | Command | Result |
 |---|---|
 | `cd backend && npm run build` | PASS (TypeScript, 0 errors) |
-| `cd backend && npm test` | PASS — **15 suites, 145 tests** |
+| `cd backend && npm test` | PASS — **15 suites, 146 tests** |
 | `cd backend && npm audit --omit=dev --audit-level=high` | PASS — 0 vulnerabilities |
 | `cd admin && npm test` | PASS — 3 tests |
 | `cd admin && npm run build` | PASS — Next.js production build, 9 dashboard routes |
@@ -65,7 +65,10 @@ Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204565 (commit `6ff90
 8. Run 45343933409 — analyzer info: `ReorderableListView.onReorder` is deprecated in favour of `onReorderItem` in this Flutter version. `onReorderItem` is not available on every supported stable release, so the classic callback is kept with a documented `// ignore: deprecated_member_use` and the index correction lives in the pure helper `reorderedTrackIds`.
 9. Run 45344330610 — `flutter test` failed 1/17: the playlist share assertion waited for a SnackBar that was queued behind earlier ones (`pumpAndSettle` does not drain SnackBar timers). The test now asserts the recorded platform `Clipboard.setData` call and its URL instead.
 10. Run 45344818579 — analyzer error `Undefined name 'platformCalls'`: the previous patch had not matched the reformatted `setUp` block. Fixed with an exact edit.
-11. Run 45345204617 — **success**: format, analyze (no issues), 17 tests, debug APK, artifact `84,329,106 bytes`; release steps skipped (no signing secrets, PR event).
+11. Run 45345204617 — success: format, analyze (no issues), 17 tests, debug APK, artifact 84,329,106 bytes.
+12. Run 45346690412 — analyzer info `curly_braces_in_flow_control_structures`: converting `_AuthState.build` to a block body deepened indentation, so the formatter split an `if (mounted) setState(...)` onto two lines. Braces added.
+13. Run 45347277654 — `flutter test` failed 1/18: `AuthScreen` unconditionally watched the new Google-capability provider, so widget tests issued a real HTTP request during mount. The capability request is now made only when the build actually ships `GOOGLE_WEB_CLIENT_ID`, and the workflow's failure diagnostics were improved (`scripts/ci_notice.py` anchors the notice at the failing-test marker instead of emitting the log tail, which GitHub truncates).
+14. Run 45348016082 — **success**: format, analyze (no issues), **18 tests**, debug APK, artifact **84,320,526 bytes**; release steps skipped (no signing secrets, PR event). Docs-only commits afterwards re-run both workflows; PR #2's check list shows the newest result.
 
 Android runs 45339134473, 45339249111, 45339775474, 45340564428 and 45342291344 were superseded/cancelled by the workflow concurrency group when newer commits were pushed; `gh run cancel` returns `403 Resource not accessible by integration` for this session, so concurrency performed the cancellation. The Android workflow's own history is: 45339330114 fail → 45339850020 fail → 45340616795 **success** → 45342691264 fail → 45343054434 **success** → 45343933409 fail → 45344330610 fail → 45344818579 fail → 45345204617 **success**.
 
@@ -76,7 +79,7 @@ Android runs 45339134473, 45339249111, 45339775474, 45340564428 and 45342291344 
 | # | Feature | State | Where |
 |---|---|---|---|
 | 1 | Email + password | verified in tests | `POST /api/auth/register`, `/login`; Argon2/bcrypt-style hashing in `authService` |
-| 2 | Google Sign-In OAuth 2.0 | implemented, **not live-verified** | Flutter `mobile/lib/core/google_auth.dart` (google_sign_in 6.3) → `POST /api/auth/google` → `backend/src/services/googleIdentity.ts` (`google-auth-library` `OAuth2Client.verifyIdToken`, audience/issuer/expiry/`sub`/verified-email checks) |
+| 2 | Google Sign-In OAuth 2.0 | implemented, **not live-verified** | Flutter `mobile/lib/core/google_auth.dart` (google_sign_in 6.3) → `POST /api/auth/google` → `backend/src/services/googleIdentity.ts` (`google-auth-library` `OAuth2Client.verifyIdToken`, audience/issuer/expiry/`sub`/verified-email checks). The button renders only when the build ships `GOOGLE_WEB_CLIENT_ID` **and** the public capability endpoint `GET /api/auth/providers` reports Google enabled, so a client can never offer a sign-in the backend would reject |
 | 3 | Forgot password | verified in tests | `POST /api/auth/forgot-password` (non-enumerating response) |
 | 4 | Reset password | verified in tests | `POST /api/auth/reset-password`, atomic single-use consumption (`$exists:false` + expiry), Flutter token screen `/auth-action` |
 | 5 | Email verification | implemented, delivery unverified | `POST /api/auth/verify-email`, `/resend-verification`; SMTP via `emailService` |
@@ -111,7 +114,7 @@ Sole primary database. Models with explicit collection names, `timestamps`, refe
 
 ### 2.5 Flutter feature surface
 
-Splash/onboarding, email register/login, forgot/reset/verify token entry, Google sign-in (rendered only when a web client ID is configured), authenticated-route redirect, home/browse/search/detail for music and anime, official preview playback with background media notification, video player with subtitle selection/speed/history checkpoints and resume, library (liked songs, watchlist, anime favourites, music/anime history, downloads list), **playlist management** (list owned/followed, create, reorder by drag, add/remove track, rename, visibility toggle, duplicate, follow/unfollow, copy share URL, delete, read-only shared view), **premium** (status, plans with rupiah pricing, real backend checkout that opens the provider-hosted payment page, cancel, payment history), **notifications** (list, mark read, mark all read, delete, nine preference switches), **account security** (sessions, devices, login history, per-session/device revocation, revoke all, resend verification, account deletion) and profile editing. Every control calls a real endpoint; there are no decorative buttons and no nonfunctional provider button.
+Splash/onboarding, email register/login, forgot/reset/verify token entry, Google sign-in (rendered only when the build ships a web client ID **and** `GET /api/auth/providers` confirms the backend can verify tokens; otherwise an explicit "not enabled on the backend" note is shown), authenticated-route redirect, home/browse/search/detail for music and anime, official preview playback with background media notification, video player with subtitle selection/speed/history checkpoints and resume, library (liked songs, watchlist, anime favourites, music/anime history, downloads list), **playlist management** (list owned/followed, create, reorder by drag, add/remove track, rename, visibility toggle, duplicate, follow/unfollow, copy share URL, delete, read-only shared view), **premium** (status, plans with rupiah pricing, real backend checkout that opens the provider-hosted payment page, cancel, payment history), **notifications** (list, mark read, mark all read, delete, nine preference switches), **account security** (sessions, devices, login history, per-session/device revocation, revoke all, resend verification, account deletion) and profile editing. Every control calls a real endpoint; there are no decorative buttons and no nonfunctional provider button.
 
 ### 2.6 Admin dashboard (requirement 8)
 
@@ -119,15 +122,15 @@ Next.js 15 + TypeScript, 9 routes (dashboard, users, catalog, providers, subscri
 
 ## 3. Tests actually executed
 
-### 3.1 Backend — 145 tests, 15 suites, all passing locally and in CI
+### 3.1 Backend — 146 tests, 15 suites, all passing locally and in CI
 
-Auth/OAuth/security tests include: `uses Google library signature verification and configured audience`, `rejects invalid signature/library errors`, `links only verified existing email and records login/device`, `rejects unverified email linking`, `rejects suspended Google account`, `unique replay record rejects repeated exchange`, `refresh rotates tokens and revokes the old session`, `exactly one concurrent refresh succeeds`, `logout immediately invalidates access JWT through session binding`, `logout revokes the session`, `forgot + reset password flow works in development`, `forgot response does not disclose nonexistent account`, `change password requires the current password`, `registers a new user and returns tokens without password hash`, `rejects duplicate registration (409)`, `GET /api/auth/me returns profile + preferences`, plus API authorization/schema/pagination/crypto/provider regression suites, and a startup configuration suite (`accepts a minimal valid configuration`, `rejects unsupported EMAIL_PROVIDER values instead of ignoring them`, `requires SMTP credentials when EMAIL_PROVIDER=smtp`, `rejects a partial SMTP group`, `rejects a partial object storage group`, `rejects a non-redis REDIS_URL scheme`, `rejects unsupported payment gateways and partial payment groups`, `requires an Atlas SRV URI in production`), `SMTP enforces STARTTLS and includes actionable reset token`, `GitHub status maps only public safe fields and fixed main workflow URL`, and Stripe tests `refuses absent gateway credentials`, `rejects invalid webhook signature before persistence`, `valid signature for ignored event is acknowledged without DB access`, `tampered body with valid header rejected`.
+Auth/OAuth/security tests include: `uses Google library signature verification and configured audience`, `rejects invalid signature/library errors`, `links only verified existing email and records login/device`, `rejects unverified email linking`, `rejects suspended Google account`, `unique replay record rejects repeated exchange`, `refresh rotates tokens and revokes the old session`, `exactly one concurrent refresh succeeds`, `logout immediately invalidates access JWT through session binding`, `logout revokes the session`, `forgot + reset password flow works in development`, `forgot response does not disclose nonexistent account`, `change password requires the current password`, `registers a new user and returns tokens without password hash`, `rejects duplicate registration (409)`, `GET /api/auth/me returns profile + preferences`, `reports Google as unavailable without backend credentials and leaks no secret`,  plus API authorization/schema/pagination/crypto/provider regression suites, and a startup configuration suite (`accepts a minimal valid configuration`, `rejects unsupported EMAIL_PROVIDER values instead of ignoring them`, `requires SMTP credentials when EMAIL_PROVIDER=smtp`, `rejects a partial SMTP group`, `rejects a partial object storage group`, `rejects a non-redis REDIS_URL scheme`, `rejects unsupported payment gateways and partial payment groups`, `requires an Atlas SRV URI in production`), `SMTP enforces STARTTLS and includes actionable reset token`, `GitHub status maps only public safe fields and fixed main workflow URL`, and Stripe tests `refuses absent gateway credentials`, `rejects invalid webhook signature before persistence`, `valid signature for ignored event is acknowledged without DB access`, `tampered body with valid header rejected`.
 
 **These are unit/API tests with fake persistence and a mocked Google verifier boundary.** They prove logic, not integration. Expired-token and invalid-signature behaviour is exercised through the mocked `google-auth-library` verifier, not through Google.
 
-### 3.2 Flutter — 17 tests in 8 files, passing in CI (`flutter test`)
+### 3.2 Flutter — 18 tests in 8 files, passing in CI (`flutter test`)
 
-`api_test.dart` (record/list normalization, stable entity IDs), `google_auth_test.dart` (`Google cancellation never calls backend`, `Google ID token exchanged for MUSIKU tokens only`), `http_client_test.dart` (`401 refresh rotates secure tokens and retries authorized request`), `navigation_test.dart` (`protected navigation redirects anonymous user to login`), `player_test.dart` (`preview player loads source and forwards transport controls`), `widgets_test.dart` (auth/register/reset modes, empty media list), `premium_notifications_test.dart` (`premium checkout reports unconfigured payment honestly`, `notification read, delete and preference controls call the API`), `playlists_test.dart` (`reorder helper converts Flutter indices into persisted track order`, `playlist identity helpers tolerate unpopulated references`, `playlist list shows owned and followed sections`, `owner management actions call the playlist API`, `shared playlist opens read-only through its token`).
+`api_test.dart` (record/list normalization, stable entity IDs), `google_auth_test.dart` (`Google button requires explicit backend confirmation`, `Google cancellation never calls backend`, `Google ID token exchanged for MUSIKU tokens only`), `http_client_test.dart` (`401 refresh rotates secure tokens and retries authorized request`), `navigation_test.dart` (`protected navigation redirects anonymous user to login`), `player_test.dart` (`preview player loads source and forwards transport controls`), `widgets_test.dart` (auth/register/reset modes, empty media list), `premium_notifications_test.dart` (`premium checkout reports unconfigured payment honestly`, `notification read, delete and preference controls call the API`), `playlists_test.dart` (`reorder helper converts Flutter indices into persisted track order`, `playlist identity helpers tolerate unpopulated references`, `playlist list shows owned and followed sections`, `owner management actions call the playlist API`, `shared playlist opens read-only through its token`).
 
 All of these use fakes for the API/identity/player/clipboard boundaries: no test proves a real Google Play services sign-in, a real payment, or behaviour on a physical device. No instrumentation/emulator tests exist.
 
@@ -200,7 +203,7 @@ Setup instructions: `docs/GITHUB_ACTIONS_SETUP.md`, `docs/GOOGLE_OAUTH_SETUP.md`
 | Provider configuration available | met (env validation, manager, docs); live provider calls not performed |
 | Flutter connected with backend | implemented (Dio, secure storage, single-flight refresh, device ID); **no deployed backend to point at** |
 | GitHub Actions workflow runs | **met** — both workflows green |
-| Debug APK produced | **met** — `musiku-plus-debug-apk`, 84,329,106 bytes (run 45345204617) |
+| Debug APK produced | **met** — `musiku-plus-debug-apk`, 84,320,526 bytes (run 45348016082) |
 | Release APK produced when signing secrets exist | **NOT met** — secrets absent; release steps skipped, not faked |
 | Admin dashboard usable | builds and serves; live data requires deployed backend + Atlas |
 | Setup documentation complete | met — GOOGLE_OAUTH_SETUP, GITHUB_ACTIONS_SETUP, PROVIDER_CONFIGURATION, DEPLOYMENT, VERIFICATION |

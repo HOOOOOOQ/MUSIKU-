@@ -1,6 +1,6 @@
 # Verification and acceptance report
 
-Date: 2026-11-24 · Branch `arena/47dd4ee9-musiku` · Verified code commit `6ff9008` · Companion narrative: [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md).
+Date: 2026-11-24 · Branch `arena/47dd4ee9-musiku` · Verified code commit `e2917e7` · Companion narrative: [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md).
 
 This is a record of actual execution. It is **not** an assertion that all acceptance criteria are met.
 
@@ -8,15 +8,15 @@ This is a record of actual execution. It is **not** an assertion that all accept
 
 | Check | Result | Limits |
 |---|---|---|
-| CI `android-build.yml` run [45345204617](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617) | **SUCCESS** | `pull_request` event; debug only |
+| CI `android-build.yml` run [45348016082](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082) | **SUCCESS** | `pull_request` event; debug only |
 | ↳ `dart format --set-exit-if-changed lib test` | PASS | formatting only |
 | ↳ `flutter analyze` | PASS — "No issues found! (ran in 6.6s)" | static analysis, not runtime |
-| ↳ `flutter test` | PASS — **17 tests** in 8 files | widget/unit tests with fakes (API, identity, player, clipboard); no device, no Play services |
-| ↳ `flutter build apk --debug` + artifact upload | PASS — `musiku-plus-debug-apk`, 84,329,106 bytes | debug-signed; embeds placeholder `API_URL` because the repository variable is unset |
+| ↳ `flutter test` | PASS — **18 tests** in 8 files | widget/unit tests with fakes (API, identity, player, clipboard); no device, no Play services |
+| ↳ `flutter build apk --debug` + artifact upload | PASS — `musiku-plus-debug-apk`, 84,320,526 bytes | debug-signed; embeds placeholder `API_URL` because the repository variable is unset |
 | ↳ Release signing check / release build / release artifact | SKIPPED — `ready=false` | four signing secrets absent and PR event; **no signed release APK exists** |
-| CI `verify.yml` run [45345204565](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204565) | **SUCCESS** (green on every commit of this branch) | backend `npm ci`/build/test + admin `npm ci`/test/build on Node 22 |
+| CI `verify.yml` run [45348016205](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205) | **SUCCESS** (green on every commit of this branch) | backend `npm ci`/build/test + admin `npm ci`/test/build on Node 22 |
 | Backend `npm run build` (local) | PASS | TypeScript compilation |
-| Backend `npm test` (local) | PASS — **15 suites, 145 tests** | unit + Supertest flows against in-memory model fakes and a mocked Google verifier; no real Atlas, no real Google/SMTP/Stripe |
+| Backend `npm test` (local) | PASS — **15 suites, 146 tests** | unit + Supertest flows against in-memory model fakes and a mocked Google verifier; no real Atlas, no real Google/SMTP/Stripe |
 | Mongoose schema/index/TTL contract tests | PASS (included above) | declarations, not server-side index creation |
 | Stripe webhook signature tests | PASS (included above) | signature math against fake bodies; no live charge |
 | SMTP transport test | PASS (included above) | mocked transporter; no message was delivered |
@@ -45,12 +45,15 @@ This is a record of actual execution. It is **not** an assertion that all accept
 | 45344330610 | failed at test | playlist share assertion waited for a SnackBar queued behind earlier ones → now asserts the recorded `Clipboard.setData` call and URL |
 | 45344818579 | failed at analyze | `Undefined name 'platformCalls'`: previous patch did not match the reformatted `setUp` block → exact edit applied |
 | 45345204617 | **success** | format, analyze (no issues), 17 tests, debug APK artifact 84,329,106 bytes |
+| 45346690412 | failed at analyze | block-body conversion deepened indentation, so the formatter split an `if (mounted) setState(...)`; braces added |
+| 45347277654 | failed at test | `AuthScreen` watched the new Google-capability provider unconditionally, so widget tests issued a real HTTP request during mount → capability request now only when `GOOGLE_WEB_CLIENT_ID` is built in; `scripts/ci_notice.py` added so failing-test details survive GitHub's annotation truncation |
+| 45348016082 | **success** | format, analyze (no issues), 18 tests, debug APK artifact 84,320,526 bytes |
 
 Runs 45339134473, 45339249111, 45339775474, 45340564428 and 45342291344 were superseded/cancelled by the workflow concurrency group when newer commits were pushed (`gh run cancel` returns `403 Resource not accessible by integration`).
 
 ## Implemented source, not end-to-end verified
 
-- Auth: register/login, Google ID-token verification (`google-auth-library` signature/audience/issuer/expiry/`sub`/verified email), verified-email linking with unique sparse `googleId`, one-time replay hashes with TTL, refresh rotation with single-winner concurrency, session-bound access JWTs (`sid`+`jti`) so logout/device/session/password revocation invalidates tokens immediately, forgot/reset/verify with atomic single-use consumption, resend verification, account deletion, login history, connected devices, rate limiting.
+- Auth: register/login, public capability endpoint `GET /api/auth/providers` (no credentials exposed) that clients use to avoid rendering a provider the backend cannot verify, Google ID-token verification (`google-auth-library` signature/audience/issuer/expiry/`sub`/verified email), verified-email linking with unique sparse `googleId`, one-time replay hashes with TTL, refresh rotation with single-winner concurrency, session-bound access JWTs (`sid`+`jti`) so logout/device/session/password revocation invalidates tokens immediately, forgot/reset/verify with atomic single-use consumption, resend verification, account deletion, login history, connected devices, rate limiting.
 - Identity extensibility: Flutter `IdentityProvider` abstraction with only Google implemented; no Apple button is rendered; no nonfunctional provider UI.
 - Email: nodemailer SMTP with STARTTLS enforcement, production fail-closed `503` when unconfigured, no-op in dev/test.
 - Payments: official Stripe SDK, one-time premium Checkout with idempotency key, raw-body webhook signature verification, amount/currency/metadata validation, idempotent activation inside a MongoDB transaction.

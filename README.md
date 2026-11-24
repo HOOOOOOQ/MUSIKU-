@@ -2,15 +2,15 @@
 
 Flutter + Express/TypeScript + MongoDB Atlas + Next.js music/anime application.
 
-**Acceptance status: incomplete, not production-ready.** Both CI workflows pass on GitHub runners and a real **debug APK artifact** (`musiku-plus-debug-apk`, 84,329,106 bytes) was produced by [`android-build.yml`](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617); backend (145 tests / 15 suites), admin (3 tests + production build), `flutter analyze` (no issues) and `flutter test` (17 tests) all pass. **Release signing is not configured**, and MongoDB Atlas, Google OAuth, SMTP, Stripe and licensed media remain **unverified because no owner credentials exist**. Read [FINAL_IMPLEMENTATION_REPORT.md](docs/FINAL_IMPLEMENTATION_REPORT.md) for what is verified versus pending, and [VERIFICATION.md](docs/VERIFICATION.md) for gaps that credentials alone will not fix.
+**Acceptance status: incomplete, not production-ready.** Both CI workflows pass on GitHub runners and a real **debug APK artifact** (`musiku-plus-debug-apk`, 84,320,526 bytes) was produced by [`android-build.yml`](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082); backend (146 tests / 15 suites), admin (3 tests + production build), `flutter analyze` (no issues) and `flutter test` (18 tests) all pass. **Release signing is not configured**, and MongoDB Atlas, Google OAuth, SMTP, Stripe and licensed media remain **unverified because no owner credentials exist**. Read [FINAL_IMPLEMENTATION_REPORT.md](docs/FINAL_IMPLEMENTATION_REPORT.md) for what is verified versus pending, and [VERIFICATION.md](docs/VERIFICATION.md) for gaps that credentials alone will not fix.
 
 ## Repository
 
 - `backend/`: Express REST API, Mongoose models, authentication, provider adapters, catalog, library/history, administration, tests.
 - `admin/`: Next.js dashboard consuming the same API; no database connection in browser code.
 - `mobile/`: Material 3/Riverpod/GoRouter client with Dio, secure token storage, Google Sign-In, just_audio/audio_service, video_player, premium checkout, notification management, playlist management, account security (sessions/devices/login history/deletion), and Android configuration pinned to AGP 9.3.1 / Gradle 9.5.0 / Kotlin 2.4.20.
-- `.github/workflows/verify.yml`: backend build/tests + admin tests/build on Node 22. Executed on GitHub: [success](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204565).
-- `.github/workflows/android-build.yml`: Java 17 + Flutter stable; `pub get`, `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, debug APK, artifact `musiku-plus-debug-apk`; optional signed release (`musiku-plus-release-apk`) only when all four `ANDROID_*` signing secrets exist on a non-PR event, with secure decode/cleanup and failure diagnostics. Executed on GitHub: [success (debug only)](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617).
+- `.github/workflows/verify.yml`: backend build/tests + admin tests/build on Node 22. Executed on GitHub: [success](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205).
+- `.github/workflows/android-build.yml`: Java 17 + Flutter stable; `pub get`, `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, debug APK, artifact `musiku-plus-debug-apk`; optional signed release (`musiku-plus-release-apk`) only when all four `ANDROID_*` signing secrets exist on a non-PR event, with secure decode/cleanup and failure diagnostics. Executed on GitHub: [success (debug only)](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082).
 - `scripts/configure_signing.py`: CI-only keystore decode and escaped `key.properties` generation; never prints secret values.
 
 ## Backend
@@ -75,7 +75,7 @@ The Android Gradle wrapper is included. For a signed release, create local `mobi
 flutter build apk --release --dart-define=API_URL=https://YOUR_API_HOST/api
 ```
 
-Keystores/signing properties are ignored by Git. Build outputs are `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`. `app-debug.apk` currently exists **only as a GitHub Actions artifact** from run 45345204617 (this sandbox cannot build it locally); no signed `app-release.apk` exists because the four signing secrets are not configured. The Android toolchain is pinned to AGP 9.3.1 / Gradle 9.5.0 / Kotlin 2.4.20 to satisfy Flutter stable's minimums.
+Keystores/signing properties are ignored by Git. Build outputs are `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`. `app-debug.apk` currently exists **only as a GitHub Actions artifact** from run 45348016082 (this sandbox cannot build it locally); no signed `app-release.apk` exists because the four signing secrets are not configured. The Android toolchain is pinned to AGP 9.3.1 / Gradle 9.5.0 / Kotlin 2.4.20 to satisfy Flutter stable's minimums.
 
 ## Media and commercial integrations
 
