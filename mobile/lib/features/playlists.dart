@@ -345,6 +345,11 @@ class PlaylistDetailScreen extends ConsumerWidget {
                     ? const Center(child: Text('Playlist kosong.'))
                     : ReorderableListView.builder(
                         itemCount: entries.length,
+                        // `onReorderItem` (which pre-adjusts newIndex) is not
+                        // available on every supported stable Flutter release, so
+                        // the classic callback is kept and
+                        // `reorderedTrackIds` applies the index correction.
+                        // ignore: deprecated_member_use
                         onReorder: (oldIndex, newIndex) => mutate(
                           context,
                           ref,
