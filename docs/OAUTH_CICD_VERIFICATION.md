@@ -168,7 +168,7 @@ Android run **45362943525**, job `Android debug APK`:
 |---|---|---|
 | 5 Resolve packages (`flutter pub get`) | success | — |
 | 6 Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success | — |
-| 7 Analyze (`flutter analyze`) | success | `[notice] Flutter analyzer :: No issues found! (ran in 6.6s)` |
+| 7 Analyze (`flutter analyze`) | success | `[notice] Flutter analyzer :: No issues found! (ran in 5.6s)` |
 | 8 Test (`flutter test`) | success | `[notice] Flutter tests :: PASS — step exited 0 (reporter summary not captured in the log) | test files: 9 | declared tests: 25`. On the GitHub runner Flutter's reporter output is buffered so its `+N` progress counter never reaches the log; `scripts/report_flutter_tests.py` therefore also counts `test()`/`testWidgets()` declarations (25 across 9 files) and reports the summary text when present, rather than inventing a number |
 
 New in this round: `mobile/test/build_config_test.dart` (7 tests) covering `API_BASE_URL` precedence, the legacy `API_URL` alias, trailing-slash normalisation, whitespace handling, the deliberately non-functional `example.invalid` fallback, injectable base URL, and the assertion that no OAuth client secret or database credential is read at build time.
@@ -179,7 +179,7 @@ New in this round: `mobile/test/build_config_test.dart` (7 tests) covering `API_
 
 | Item | Value |
 |---|---|
-| Workflow / run | `android-build.yml` → run **45362943525** (commit `5037fdd`) |
+| Workflow / run | `android-build.yml` → run **45362943525** (commit `2d97b79`) |
 | Artifact name | **`musiku-plus-debug-apk`** (artifact id 14906171040) |
 | Source path | `mobile/build/app/outputs/flutter-apk/app-debug.apk` |
 | Download | Run page → **Artifacts** → `musiku-plus-debug-apk` (ZIP containing `app-debug.apk`) |
