@@ -19,3 +19,7 @@ android/.gradle/
 backend/tests/atlas/preflight.json
 backend/ci-atlas.log
 mobile/ci-logs/
+
+# Python bytecode (CI helper scripts)
+__pycache__/
+*.py[cod]
