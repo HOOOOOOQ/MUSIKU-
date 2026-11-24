@@ -191,9 +191,12 @@ class _AuthState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // `null` while the capability request is in flight: the Google button stays
-    // hidden until the backend confirms it can verify Google ID tokens.
-    final backendGoogleEnabled = ref.watch(googleAvailableProvider).value;
+    // The capability request is only made when the build actually ships a web
+    // client ID; `null` while loading keeps the Google button hidden until the
+    // backend confirms it can verify Google ID tokens.
+    final backendGoogleEnabled = googleWebClientId.isEmpty
+        ? null
+        : ref.watch(googleAvailableProvider).value;
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
