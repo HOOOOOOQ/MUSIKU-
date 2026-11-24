@@ -101,26 +101,19 @@ jobs:
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           MONGODB_TEST_DB_NAME: musiku_plus_ci_test
           ATLAS_PROBE_TIMEOUT_MS: 15000
-        run: npm run test:atlas:integration
-      - name: Report Atlas availability
-        if: always()
         run: |
-          if [[ -f tests/atlas/preflight.json ]]; then
-            python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
-          import json, pathlib
-          data = json.loads(pathlib.Path('tests/atlas/preflight.json').read_text())
-          print('\n### Atlas integration outcome\n')
-          print(f"- Live database used: {'yes' if data['available'] else 'no — tests reported as skipped'}")
-          print(f"- Test database: `{data.get('testDatabase') or 'n/a'}`")
-          print(f"- URI scheme: `{data.get('uriScheme')}`")
-          print(f"- Transactions (replica set): {'yes' if data.get('transactions') else 'no'}")
-          print(f"- Latency: {data.get('latencyMs')} ms")
-          print(f"- Reason: {data.get('reason')}")
-          PY
-          else
-            echo "### Atlas integration outcome" >> "$GITHUB_STEP_SUMMARY"
-            echo "Pre-flight result file was not produced." >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          npm run test:atlas:integration 2>&1 | tee ci-atlas.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            python3 ../scripts/ci_notice.py ci-atlas.log 'Atlas integration' 'FAILURE'
           fi
+          exit "$status"
+      # Publishes the honest outcome (live run vs. skipped, with the recorded
+      # reason) as an annotation and job summary — counts only, never values.
+      - name: Report Atlas outcome
+        if: always()
+        run: python3 ../scripts/report_atlas_outcome.py ci-atlas.log tests/atlas/preflight.json
 
   admin:
     name: Admin build and tests

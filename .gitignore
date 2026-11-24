@@ -17,3 +17,5 @@ android/.gradle/
 
 # Atlas pre-flight probe result (generated in CI; contains no secrets)
 backend/tests/atlas/preflight.json
+backend/ci-atlas.log
+mobile/ci-logs/
