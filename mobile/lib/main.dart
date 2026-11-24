@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:audio_service/audio_service.dart';
 import 'core/api.dart';
 import 'features/auth_action.dart';
@@ -25,6 +26,9 @@ Future<void> main() async {
   runApp(const ProviderScope(child: MusikuApp()));
 }
 
+/// Secure storage instance shared with the API client for route protection.
+const secureStorage = FlutterSecureStorage();
+
 final router = GoRouter(
   initialLocation: '/splash',
   redirect: (context, state) async {
@@ -32,7 +36,7 @@ final router = GoRouter(
     if (publicRoutes.contains(state.uri.path)) {
       return null;
     }
-    final token = await Api().storage.read(key: 'accessToken');
+    final token = await secureStorage.read(key: 'accessToken');
     return token == null ? '/login' : null;
   },
   routes: [
@@ -42,6 +46,11 @@ final router = GoRouter(
       path: '/account-security',
       builder: (_, __) => const AccountSecurityScreen(),
     ),
+    GoRoute(
+      path: '/notifications',
+      builder: (_, __) => const NotificationsScreen(),
+    ),
+    GoRoute(path: '/premium', builder: (_, __) => const PremiumScreen()),
     GoRoute(path: '/auth-action', builder: (_, __) => const AuthActionScreen()),
     GoRoute(path: '/login', builder: (_, __) => const AuthScreen()),
     GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
