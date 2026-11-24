@@ -23,7 +23,9 @@ class GoogleIdentityProvider implements IdentityProvider {
   }
 
   @override
-  Future<void> signOut() => client.signOut();
+  Future<void> signOut() async {
+    await client.signOut();
+  }
 }
 
 class GoogleAuth {

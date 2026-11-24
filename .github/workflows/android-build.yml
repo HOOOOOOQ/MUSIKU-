@@ -39,7 +39,15 @@ jobs:
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test 2>&1 | tee ci-logs/format.log
       - name: Analyze
-        run: flutter analyze 2>&1 | tee ci-logs/analyze.log
+        run: |
+          set +e
+          flutter analyze 2>&1 | tee ci-logs/analyze.log
+          status=${PIPESTATUS[0]}
+          while IFS= read -r line; do
+            line="${line//'%'/'%25'}"
+            echo "::notice title=Flutter analyzer::$line"
+          done < ci-logs/analyze.log
+          exit "$status"
       - name: Test
         run: flutter test 2>&1 | tee ci-logs/tests.log
       - name: Build debug APK
