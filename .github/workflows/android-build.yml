@@ -61,16 +61,20 @@ jobs:
           set -o pipefail
           flutter --version | tee ci-logs/toolchain.log
           flutter pub get 2>&1 | tee ci-logs/pub-get.log
-      # Canonical formatting is enforced, and on a push run the formatter also
-      # heals the branch: `dart format` is deterministic, so committing its
-      # output cannot change behaviour. The fix-up commit carries [skip ci] so
-      # it neither re-triggers this workflow nor cancels the running job
-      # through the concurrency group. On pull-request runs (possibly from a
-      # fork, where the token cannot push) unformatted sources fail the build.
       # Canonical formatting is enforced, and the formatter also heals the
       # branch: `dart format` is deterministic, so committing its output cannot
-      # change behaviour. Fork pull requests cannot be pushed to, so there the
-      # check simply fails and lists the offending files.
+      # change behaviour, and this same run goes on to analyze, test and build
+      # the formatted tree it just pushed.
+      #
+      # The fix-up commit carries `[skip ci]` on purpose. Without it a bot
+      # authored head commit creates fresh workflow runs that GitHub gates
+      # behind a human "Approve and run" click (observed as `action_required`
+      # on runs 45393449935/45393450053 for style commit `9a2c9f9`), so the
+      # branch ends up with checks nobody can start; `[skip ci]` keeps the
+      # evidence on the run that actually did the work.
+      #
+      # Fork pull requests cannot be pushed to with the job token, so there the
+      # step fails and lists the offending files instead of healing.
       - name: Format Dart sources
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -104,9 +108,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib test
-          git commit -m "style(mobile): apply dart format ($changed)"
+          git commit -m "style(mobile): apply dart format ($changed) [skip ci]"
           git push origin "HEAD:$HEAD_BRANCH"
-          echo "::notice title=Dart format::reformatted and pushed a style commit to $HEAD_BRANCH: $changed"
+          echo "::notice title=Dart format::reformatted and pushed a style commit to $HEAD_BRANCH ([skip ci], so this run is the evidence): $changed"
           dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: |
