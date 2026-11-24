@@ -120,6 +120,11 @@ def main() -> int:
         return 1
 
     print("\nResult: **PASS** — no backend secret value or credential pattern was found in the APK.")
+    print(
+        f"::notice title=APK secret scan::PASS — {scanned_members} members decompressed, "
+        f"{len(secrets)} secret values compared, {len(FORBIDDEN_PATTERNS)} credential patterns checked, "
+        f"{size:,} byte artifact; no backend secret embedded"
+    )
     return 0
 
 
