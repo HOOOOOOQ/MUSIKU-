@@ -1,4 +1,4 @@
-import { envSchema, validateMongoUri } from '../../src/config/env';
+import { animasuConfig, envSchema, hasAnimasu, validateMongoUri } from '../../src/config/env';
 
 const base = {
   MONGODB_URI: 'mongodb+srv://user:pass@cluster.mongodb.net/musiku_plus',
@@ -63,6 +63,42 @@ describe('startup configuration validation', () => {
     expect(envSchema.safeParse({ ...base, MONGODB_URI: 'postgres://user:pass@host/db' }).success).toBe(false);
     expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://' }).success).toBe(false);
     expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://user:pass@short/db' }).success).toBe(false);
+  });
+});
+
+describe('Animeku (Animasu) provider configuration', () => {
+  it('defaults to metadata-only playback: authorization is opt-in, never implied', () => {
+    const parsed = envSchema.parse(base);
+    expect(parsed.ANIMASU_ENABLED).toBe('true');
+    expect(parsed.ANIMASU_STREAMING_AUTHORIZED).toBe('false');
+    expect(parsed.ANIMASU_ALLOWED_STREAM_HOSTS).toBe('');
+    expect(hasAnimasu).toBe(true);
+  });
+
+  it('refuses to authorize playback without a media host allowlist', () => {
+    const result = envSchema.safeParse({ ...base, ANIMASU_STREAMING_AUTHORIZED: 'true' });
+    expect(result.success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_STREAMING_AUTHORIZED: 'true', ANIMASU_ALLOWED_STREAM_HOSTS: 'cdn.example.com' }).success).toBe(true);
+  });
+
+  it('rejects a non-https origin, a bare host and credentials embedded in the URL', () => {
+    expect(envSchema.safeParse({ ...base, ANIMASU_BASE_URL: 'http://api.nexadev.my.id/animasu' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_BASE_URL: 'api.nexadev.my.id' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_BASE_URL: 'https://user:pass@api.nexadev.my.id/animasu' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_BASE_URL: 'https://api.nexadev.my.id/animasu' }).success).toBe(true);
+  });
+
+  it('rejects values outside the provider budget ranges', () => {
+    expect(envSchema.safeParse({ ...base, ANIMASU_TIMEOUT_MS: '10' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_CACHE_TTL_SEC: '999999' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ANIMASU_RATE_LIMIT_PER_MIN: '0' }).success).toBe(false);
+  });
+
+  it('exposes a normalized runtime view with the allowlist parsed and lowercased', () => {
+    const config = animasuConfig();
+    expect(config).toMatchObject({ enabled: true, baseUrl: 'https://api.nexadev.my.id/animasu', streamingAuthorized: false, timeoutMs: 10000, cacheTtlSec: 900, rateLimitPerMin: 60 });
+    expect(config.allowedStreamHosts).toEqual([]);
+    expect(config.baseUrl.endsWith('/')).toBe(false);
   });
 });
 

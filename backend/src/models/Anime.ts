@@ -21,6 +21,11 @@ const animeSchema = new Schema(
     status: { type: String, default: '' },
     format: { type: String, default: '' },
     episodeCount: { type: Number, default: 0 },
+    /* Latest-episode pointer as reported by the catalog provider. Text is kept
+     * verbatim (providers send labels such as "Ep 12" or "??"); the number is
+     * only set when one could be parsed. Stream URLs are NEVER stored here. */
+    latestEpisodeText: { type: String, default: '' },
+    latestEpisodeNumber: { type: Number, default: undefined },
     rating: { type: Number, default: 0, index: true },
     popularity: { type: Number, default: 0, index: true },
     ageRating: { type: String, default: '' },

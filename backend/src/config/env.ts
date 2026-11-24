@@ -48,6 +48,21 @@ export const envSchema = z.object({
   LICENSED_MUSIC_BASE_URL: z.string().optional().default(''),
   LICENSED_ANIME_API_KEY: z.string().optional().default(''),
   LICENSED_ANIME_BASE_URL: z.string().optional().default(''),
+  /* ── Animasu (internal provider behind the consumer-facing "Animeku") ──────
+   * Metadata (catalog, search, schedule, details, episodes) is served from this
+   * public API. Video playback is a *rights* question, not a technical one, so
+   * stream URLs are only returned when the deployer explicitly asserts that the
+   * distribution is authorized AND names the hosts that may serve media.
+   * Without both, the API returns metadata plus an explicit
+   * `playback: 'not_authorized'` state instead of pretending playback works. */
+  ANIMASU_BASE_URL: z.string().default('https://api.nexadev.my.id/animasu'),
+  ANIMASU_ENABLED: z.enum(['true', 'false']).default('true'),
+  ANIMASU_STREAMING_AUTHORIZED: z.enum(['true', 'false']).default('false'),
+  // Comma-separated host allowlist for resolved media URLs (SSRF + rights guard).
+  ANIMASU_ALLOWED_STREAM_HOSTS: z.string().default(''),
+  ANIMASU_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+  ANIMASU_CACHE_TTL_SEC: z.coerce.number().int().min(0).max(86400).default(900),
+  ANIMASU_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(600).default(60),
   PAYMENT_SUCCESS_URL: z.string().url().default('https://musikuplus.app/payment/success'),
   PAYMENT_CANCEL_URL: z.string().url().default('https://musikuplus.app/payment/cancel'),
   PAYMENT_PROVIDER: z.string().optional().default(''),
@@ -76,6 +91,9 @@ export const envSchema = z.object({
   if (config.GOOGLE_CLIENT_SECRET && !config.GOOGLE_WEB_CLIENT_ID && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_CLIENT_SECRET'], message: 'GOOGLE_CLIENT_SECRET requires GOOGLE_WEB_CLIENT_ID (or GOOGLE_CLIENT_ID)' });
   if (config.GOOGLE_ACCEPT_ANDROID_AUDIENCE === 'true' && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_ACCEPT_ANDROID_AUDIENCE'], message: 'GOOGLE_ACCEPT_ANDROID_AUDIENCE=true requires GOOGLE_CLIENT_ID' });
   if (config.JWT_SECRET === config.JWT_REFRESH_SECRET) context.addIssue({ code: 'custom', path: ['JWT_REFRESH_SECRET'], message: 'JWT_SECRET and JWT_REFRESH_SECRET must be different keys' });
+  if (!/^https:\/\/[^\s]+/.test(config.ANIMASU_BASE_URL)) context.addIssue({ code: 'custom', path: ['ANIMASU_BASE_URL'], message: 'ANIMASU_BASE_URL must be an https:// origin (no credentials, no whitespace)' });
+  if (/^https:\/\/[^/@\s]+:[^/@\s]*@/.test(config.ANIMASU_BASE_URL)) context.addIssue({ code: 'custom', path: ['ANIMASU_BASE_URL'], message: 'ANIMASU_BASE_URL must not embed credentials in the URL' });
+  if (config.ANIMASU_STREAMING_AUTHORIZED === 'true' && !config.ANIMASU_ALLOWED_STREAM_HOSTS.trim()) context.addIssue({ code: 'custom', path: ['ANIMASU_ALLOWED_STREAM_HOSTS'], message: 'ANIMASU_STREAMING_AUTHORIZED=true requires ANIMASU_ALLOWED_STREAM_HOSTS so media URLs are restricted to known hosts' });
   const uriIssue = validateMongoUri(config.MONGODB_URI, config.NODE_ENV === 'production');
   if (uriIssue) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: uriIssue });
   if (config.NODE_ENV === 'production' && !config.MONGODB_URI.startsWith('mongodb+srv://')) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: 'Production requires Atlas mongodb+srv TLS URI' });
@@ -170,6 +188,39 @@ export function googleOAuthConfig(): {
 }
 
 export const hasGoogleOAuth = googleOAuthConfig().configured;
+
+/**
+ * Animasu provider configuration, resolved on demand (same pattern as
+ * `googleOAuthConfig`) so tests and configuration reloads stay coherent.
+ *
+ * `streamingAuthorized` is deliberately conservative: it is only true when the
+ * deployer set ANIMASU_STREAMING_AUTHORIZED=true *and* named at least one
+ * allowed media host. Everything else stays metadata-only.
+ */
+export function animasuConfig(): {
+  enabled: boolean;
+  baseUrl: string;
+  streamingAuthorized: boolean;
+  allowedStreamHosts: string[];
+  timeoutMs: number;
+  cacheTtlSec: number;
+  rateLimitPerMin: number;
+} {
+  const allowedStreamHosts = env.ANIMASU_ALLOWED_STREAM_HOSTS.split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  return {
+    enabled: env.ANIMASU_ENABLED === 'true',
+    baseUrl: env.ANIMASU_BASE_URL.replace(/\/+$/, ''),
+    streamingAuthorized: env.ANIMASU_STREAMING_AUTHORIZED === 'true' && allowedStreamHosts.length > 0,
+    allowedStreamHosts,
+    timeoutMs: env.ANIMASU_TIMEOUT_MS,
+    cacheTtlSec: env.ANIMASU_CACHE_TTL_SEC,
+    rateLimitPerMin: env.ANIMASU_RATE_LIMIT_PER_MIN,
+  };
+}
+
+export const hasAnimasu = animasuConfig().enabled;
 
 export const hasLicensedMusic = Boolean(env.LICENSED_MUSIC_API_KEY && env.LICENSED_MUSIC_BASE_URL);
 export const hasLicensedAnime = Boolean(env.LICENSED_ANIME_API_KEY && env.LICENSED_ANIME_BASE_URL);
