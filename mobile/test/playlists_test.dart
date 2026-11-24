@@ -105,12 +105,14 @@ Widget harness(FakeApi api, Widget child) => ProviderScope(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final platformCalls = <MethodCall>[];
   setUp(() {
+    platformCalls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          SystemChannels.platform,
-          (call) async => null,
-        );
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          platformCalls.add(call);
+          return null;
+        });
   });
 
   test(
