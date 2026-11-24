@@ -320,7 +320,9 @@ void main() {
         <String, dynamic>{'key': 'all', 'items': <Map<String, dynamic>>[]},
         <String, dynamic>{
           'key': 'rabu',
-          'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'x'}],
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{'title': 'x'},
+          ],
         },
       ];
       // An explicit choice wins even when another bucket has more items.
@@ -332,11 +334,15 @@ void main() {
         pickScheduleDay(<Map<String, dynamic>>[
           <String, dynamic>{
             'key': 'all',
-            'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'a'}],
+            'items': <Map<String, dynamic>>[
+              <String, dynamic>{'title': 'a'},
+            ],
           },
           <String, dynamic>{
             'key': 'kamis',
-            'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'y'}],
+            'items': <Map<String, dynamic>>[
+              <String, dynamic>{'title': 'y'},
+            ],
           },
         ], 'senin')['key'],
         'all',
