@@ -1,3 +1,7 @@
+import { processStripeWebhook } from './services/stripePayments';
+import { asyncHandler } from './middleware/errorHandler';
+import { hasPayments } from './config/env';
+import { fail } from './utils/apiResponse';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -30,6 +34,11 @@ export function createApp(): Application {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: [env.CLIENT_URL, env.ADMIN_URL], credentials: true }));
+  app.post('/api/premium/webhook', express.raw({ type: 'application/json', limit: '1mb' }), asyncHandler(async (req, res) => {
+    if (!hasPayments) { fail(res, 501, 'INTEGRATION_NOT_CONFIGURED', 'Stripe webhook not configured'); return; }
+    await processStripeWebhook(req.body as Buffer, req.get('stripe-signature') ?? '');
+    res.json({ received: true });
+  }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
   if (env.NODE_ENV !== 'test') app.use(morgan('combined'));
@@ -43,6 +52,7 @@ export function createApp(): Application {
 
   // Global rate limit (generous; auth endpoints get stricter limits below).
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+  app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
   app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false }));
   app.use('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false }));
 

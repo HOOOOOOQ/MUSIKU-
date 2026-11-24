@@ -1,10 +1,11 @@
+import { integrationStatus } from '../services/integrationStatus';
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { requireAuth, requireAdmin, AuthedRequest } from '../middleware/auth';
 import {
-  User, MusicTrack, MusicArtist, MusicAlbum, Anime, AnimeEpisode,
+  UserSession, LoginHistory, User, MusicTrack, MusicArtist, MusicAlbum, Anime, AnimeEpisode,
   AuditLog, SystemEvent, AppSetting, FeatureFlag, Subscription, Payment,
   Report, ModerationLog, ApiProvider,
 } from '../models';
@@ -176,3 +177,12 @@ function stripSecrets(user: unknown): Record<string, unknown> {
   void passwordHash;
   return rest;
 }
+
+adminRouter.get('/integration-status', asyncHandler(async (_req, res) => {
+  const [database, emailUsers, googleUsers, sessions, recentLogins] = await Promise.all([
+    databaseHealth(), User.countDocuments({ passwordHash: { $exists: true } }), User.countDocuments({ googleId: { $exists: true } }),
+    UserSession.countDocuments({ revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }),
+    LoginHistory.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 86400000) } } }, { $group: { _id: { method: '$method', success: '$success' }, count: { $sum: 1 } } }]),
+  ]);
+  ok(res, { integrations: integrationStatus(), database, authentication: { emailUsers, googleUsers, activeSessions: sessions, recentLogins } });
+}));

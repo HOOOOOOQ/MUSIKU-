@@ -1,5 +1,7 @@
+import { googleIdentity } from './googleIdentity';
+import { deliverActionEmail } from './emailService';
 import crypto from 'crypto';
-import { User, UserProfile, UserSession, UserPreference, UserDevice, LoginHistory, PasswordReset, EmailVerification, NotificationPreference } from '../models';
+import { User, UserProfile, UserSession, UserPreference, UserDevice, LoginHistory, PasswordReset, EmailVerification, NotificationPreference, OAuthReplay } from '../models';
 import { hashPassword, verifyPassword, sha256, randomToken, signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/crypto';
 import { env, hasGoogleOAuth } from '../config/env';
 import { badRequest, unauthorized, conflict, notFound } from '../utils/apiResponse';
@@ -60,6 +62,7 @@ export const authService = {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
+    await deliverActionEmail(email, 'verify-email', verifyToken);
     const tokens = await issueTokens(String(user._id), user.role);
     return { user: sanitizeUser(user), tokens };
   },
@@ -98,23 +101,21 @@ export const authService = {
     if (!hasGoogleOAuth) {
       throw new Error('GOOGLE_NOT_CONFIGURED');
     }
-    const res = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
-    );
-    if (!res.ok) throw unauthorized('Invalid Google ID token');
-    const info = (await res.json()) as { sub: string; email: string; aud: string; name?: string; picture?: string };
-    if (info.aud !== env.GOOGLE_CLIENT_ID) throw unauthorized('Google token audience mismatch');
+    const info = await googleIdentity.verify(idToken);
+    try { await OAuthReplay.create({ tokenHash: sha256(idToken), expiresAt: new Date(info.exp * 1000) }); }
+    catch (error) { if ((error as {code?: number}).code === 11000) throw unauthorized('Google token already exchanged'); throw error; }
 
     let user = await User.findOne({ googleId: info.sub });
     if (!user) {
-      user = await User.findOne({ email: info.email.toLowerCase() });
+      user = await User.findOne({ email: info.email!.toLowerCase() });
       if (user) {
+        if (!user.emailVerified || (user.googleId && user.googleId !== info.sub)) throw conflict('Verify the existing account email before linking Google');
         user.googleId = info.sub;
         await user.save();
       } else {
-        const username = info.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || `user${Date.now()}`;
+        const username = info.email!.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || `user${Date.now()}`;
         user = await User.create({
-          email: info.email.toLowerCase(),
+          email: info.email!.toLowerCase(),
           username: `${username}${Math.floor(Math.random() * 1000)}`,
           googleId: info.sub,
           emailVerified: true,
@@ -125,6 +126,9 @@ export const authService = {
         await UserProfile.updateOne({ user: user._id }, { $set: { avatarUrl: info.picture ?? '' } });
       }
     }
+    if (user.status !== 'active') throw unauthorized('Account unavailable');
+    await LoginHistory.create({ user: user._id, success: true, method: 'google', ip: meta.ip ?? '', userAgent: meta.userAgent ?? '' });
+    if (meta.deviceId) await UserDevice.findOneAndUpdate({ user: user._id, deviceId: meta.deviceId }, { $set: { platform: 'android', lastSeenAt: new Date() } }, { upsert: true, new: true });
     const tokens = await issueTokens(String(user._id), user.role, meta.deviceId ?? '', meta.ip ?? '', meta.userAgent ?? '');
     return { user: sanitizeUser(user), tokens };
   },
@@ -136,7 +140,7 @@ export const authService = {
     } catch {
       throw unauthorized('Invalid or expired refresh token');
     }
-    const session = await UserSession.findOne({ refreshTokenHash: sha256(refreshToken), revokedAt: undefined });
+    const session = await UserSession.findOneAndUpdate({ refreshTokenHash: sha256(refreshToken), revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }, { $set: { revokedAt: new Date() } }, { new: true });
     if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
       throw unauthorized('Session expired or revoked');
     }
@@ -144,8 +148,6 @@ export const authService = {
     if (!user || user.status !== 'active') throw unauthorized('Account unavailable');
 
     // Rotate refresh token.
-    session.revokedAt = new Date();
-    await session.save();
     return issueTokens(String(user._id), user.role, session.deviceId, session.ip, session.userAgent);
   },
 
@@ -155,13 +157,14 @@ export const authService = {
 
   async forgotPassword(email: string): Promise<{ sent: boolean; token?: string }> {
     const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) return { sent: false }; // Do not leak account existence.
+    if (!user) return { sent: true }; // Do not leak account existence.
     const token = randomToken();
     await PasswordReset.create({
       user: user._id,
       tokenHash: sha256(token),
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
+    await deliverActionEmail(user.email, 'reset-password', token);
     // Email delivery happens via the configured email provider (needs credentials).
     // Outside production (dev/test) the token is returned so flows can be tested;
     // in production it is delivered by email only.
@@ -169,7 +172,7 @@ export const authService = {
   },
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    const record = await PasswordReset.findOne({ tokenHash: sha256(token), usedAt: undefined });
+    const record = await PasswordReset.findOne({ tokenHash: sha256(token), usedAt: { $exists: false } });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired reset token');
     }
@@ -183,7 +186,7 @@ export const authService = {
   },
 
   async verifyEmail(token: string): Promise<void> {
-    const record = await EmailVerification.findOne({ tokenHash: sha256(token), usedAt: undefined });
+    const record = await EmailVerification.findOne({ tokenHash: sha256(token), usedAt: { $exists: false } });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired verification token');
     }
@@ -208,7 +211,8 @@ export const authService = {
     if (!user) throw notFound('User not found');
     user.status = 'deleted';
     user.email = `deleted-${user._id}@deleted.local`;
-    user.username = `deleted-${user._id}`;
+    user.username = `del_${String(user._id).slice(-24)}`;
+    user.googleId = undefined;
     user.passwordHash = undefined;
     await user.save();
     await UserSession.updateMany({ user: userId }, { $set: { revokedAt: new Date() } });
@@ -224,7 +228,7 @@ export const authService = {
 };
 
 export function sanitizeUser(user: unknown): Record<string, unknown> {
-  const { passwordHash, ...rest } = user as Record<string, unknown>;
+  const { passwordHash, ...rest } = ((user as { toObject?: () => unknown }).toObject?.() ?? user) as Record<string, unknown>;
   void passwordHash;
   return rest;
 }

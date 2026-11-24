@@ -19,7 +19,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true, minlength: 3, maxlength: 30, index: true },
     passwordHash: { type: String, default: undefined },
-    googleId: { type: String, default: undefined, index: true },
+    googleId: { type: String, default: undefined, unique: true, sparse: true },
     role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
     status: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active', index: true },
     emailVerified: { type: Boolean, default: false },
@@ -149,3 +149,7 @@ emailVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const EmailVerification = mongoose.model('EmailVerification', emailVerificationSchema, 'email_verifications');
 
 export type ObjectId = Types.ObjectId;
+
+const oauthReplaySchema = new Schema({ tokenHash: { type: String, required: true, unique: true }, expiresAt: { type: Date, required: true } }, { timestamps: true });
+oauthReplaySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const OAuthReplay = mongoose.model('OAuthReplay', oauthReplaySchema, 'oauth_replays');

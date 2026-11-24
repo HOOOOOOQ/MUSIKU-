@@ -1,3 +1,4 @@
+import { stripeCheckout } from './stripePayments';
 import { User, Subscription, Payment } from '../models';
 import { env, hasPayments } from '../config/env';
 import { notFound, badRequest } from '../utils/apiResponse';
@@ -49,7 +50,7 @@ export const subscriptionService = {
       throw err;
     }
     // Never create an unchargeable transaction or claim checkout is ready.
-    throw badRequest('A concrete signed payment-provider adapter must be configured before checkout');
+    return stripeCheckout(userId, plan);
   },
 
   /** Webhook handler: mark payment paid and activate premium. */

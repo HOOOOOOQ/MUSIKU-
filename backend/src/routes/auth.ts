@@ -22,7 +22,7 @@ const loginSchema = z.object({
   deviceId: z.string().max(128).optional(),
 });
 
-const googleSchema = z.object({ idToken: z.string().min(1) });
+const googleSchema = z.object({ idToken: z.string().min(1).max(8192), deviceId: z.string().max(128).optional() });
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 const forgotSchema = z.object({ email: z.string().email() });
 const resetSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8).max(128) });
@@ -49,7 +49,7 @@ authRouter.post('/login', validate(loginSchema), asyncHandler(async (req, res) =
 
 authRouter.post('/google', validate(googleSchema), asyncHandler(async (req, res) => {
   if (!hasGoogleOAuth) {
-    needsCredentials(res, 'Google Sign-In', ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']);
+    needsCredentials(res, 'Google Sign-In', ['GOOGLE_CLIENT_ID']);
     return;
   }
   const result = await authService.loginWithGoogle(req.body.idToken, meta(req));

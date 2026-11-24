@@ -30,9 +30,17 @@ const envSchema = z.object({
   LICENSED_MUSIC_BASE_URL: z.string().optional().default(''),
   LICENSED_ANIME_API_KEY: z.string().optional().default(''),
   LICENSED_ANIME_BASE_URL: z.string().optional().default(''),
+  PAYMENT_SUCCESS_URL: z.string().url().default('https://musikuplus.app/payment/success'),
+  PAYMENT_CANCEL_URL: z.string().url().default('https://musikuplus.app/payment/cancel'),
   PAYMENT_PROVIDER: z.string().optional().default(''),
   PAYMENT_SECRET_KEY: z.string().optional().default(''),
   PAYMENT_WEBHOOK_SECRET: z.string().optional().default(''),
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+  EMAIL_ACTION_URL: z.string().url().default('https://musikuplus.app/auth'),
   EMAIL_PROVIDER: z.string().optional().default(''),
   EMAIL_API_KEY: z.string().optional().default(''),
   EMAIL_FROM: z.string().default('noreply@musikuplus.app'),
@@ -62,9 +70,9 @@ function loadEnv(): Env {
 
 export const env: Env = loadEnv();
 
-export const hasGoogleOAuth = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+export const hasGoogleOAuth = Boolean(env.GOOGLE_CLIENT_ID);
 export const hasLicensedMusic = Boolean(env.LICENSED_MUSIC_API_KEY && env.LICENSED_MUSIC_BASE_URL);
 export const hasLicensedAnime = Boolean(env.LICENSED_ANIME_API_KEY && env.LICENSED_ANIME_BASE_URL);
-export const hasPayments = Boolean(env.PAYMENT_PROVIDER && env.PAYMENT_SECRET_KEY);
-export const hasEmail = Boolean(env.EMAIL_PROVIDER && env.EMAIL_API_KEY);
+export const hasPayments = Boolean(env.PAYMENT_PROVIDER === 'stripe' && env.PAYMENT_SECRET_KEY && env.PAYMENT_WEBHOOK_SECRET);
+export const hasEmail = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
 export const hasStorage = Boolean(env.STORAGE_ENDPOINT && env.STORAGE_ACCESS_KEY && env.STORAGE_SECRET_KEY);

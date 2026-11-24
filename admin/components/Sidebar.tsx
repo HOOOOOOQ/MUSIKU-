@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { clearToken } from '@/lib/api';
 
 const NAV = [
+  { href: '/integrations', label: 'Integration Health', icon: '◎' },
   { href: '/', label: 'Dashboard', icon: '▦' },
   { href: '/users', label: 'Users', icon: '◉' },
   { href: '/providers', label: 'API Providers', icon: '⬡' },
