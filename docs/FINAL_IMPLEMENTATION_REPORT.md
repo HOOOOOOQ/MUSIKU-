@@ -1,13 +1,13 @@
 # MUSIKU+ — Final implementation report
 
 Date: 2026-11-24 · Branch: `arena/47dd4ee9-musiku` · Pull request: https://github.com/HOOOOOOQ/MUSIKU-/pull/2
-Code commit verified in CI: `b499117` (earlier sections reference `e2917e7` runs and remain accurate for that commit) · This report records **executed** results, not intentions.
+Code commit verified in CI: `2d97b79` (earlier sections reference `e2917e7` runs and remain accurate for that commit) · This report records **executed** results, not intentions.
 
 ## Verdict
 
 **MUSIKU+ is NOT production-ready.** The application code, CI pipelines and a real debug APK artifact now exist and pass. Since the owner added the five repository secrets, **MongoDB Atlas is verified live in CI** (13/13 real-database integration tests, replica-set transactions) and **JWT rotation with reuse detection is verified** both hermetically and against that database. Still **unmet because they need owner-side action outside CI**: live Google sign-in on a device, SMTP delivery, Stripe charging, licensed media providers, Android release signing, and a deployed backend.
 
-> **Latest verified state (commit `b499117`, 2026-11-24).** Verify run [45359147433](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45359147433): configuration audit — required `MONGODB_URI`, distinct `JWT_SECRET`/`JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID` all detected, none missing (values never printed); backend build + **169 tests / 15 suites**; **Atlas integration LIVE — 13/13 passed** against `musiku_plus_ci_test` (`mongodb+srv`, transactions available, probe latency 2924 ms); admin tests + production build; `npm audit` 0 vulnerabilities. Android run [45359147408](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45359147408): format, analyze (`No issues found! (ran in 6.6s)`), tests across **9 files** all passing, debug APK **163,425,048 bytes** (`sha256 1fdd69e6…fc9c2`) uploaded as `musiku-plus-debug-apk` (artifact archive 84,326,969 bytes), **APK secret scan PASS** (221 archive members decompressed and compared against the three configured backend secrets — none embedded), `GOOGLE_WEB_CLIENT_ID` baked in from the repository secret, release signing skipped as unconfigured. Full evidence and the security audit: [OAUTH_CICD_VERIFICATION.md](OAUTH_CICD_VERIFICATION.md).
+> **Latest verified state (commit `2d97b79`, 2026-11-24).** Verify run [45359147433](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45359147433): configuration audit — required `MONGODB_URI`, distinct `JWT_SECRET`/`JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID` all detected, none missing (values never printed); backend build + **169 tests / 15 suites**; **Atlas integration LIVE — 13/13 passed** against `musiku_plus_ci_test` (`mongodb+srv`, transactions available, probe latency 2912 ms); admin tests + production build; `npm audit` 0 vulnerabilities. Android run [45359147408](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45359147408): format, analyze (`No issues found! (ran in 5.6s)`), tests across **9 files** all passing, debug APK **163,425,048 bytes** (`sha256 1ecaa9c8…a773`) uploaded as `musiku-plus-debug-apk` (artifact archive 84,326,969 bytes), **APK secret scan PASS** (221 archive members decompressed and compared against the three configured backend secrets — none embedded), `GOOGLE_WEB_CLIENT_ID` baked in from the repository secret, release signing skipped as unconfigured. Full evidence and the security audit: [OAUTH_CICD_VERIFICATION.md](OAUTH_CICD_VERIFICATION.md).
 
 Everything below distinguishes three states: **verified** (executed and observed), **implemented but unverified** (code exists, needs live credentials), **gap** (code does not yet exist; credentials alone will not fix it).
 
@@ -22,7 +22,7 @@ Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082 (commit `e2917
 | actions/checkout@v5, setup-java@v5 (Temurin 17), subosito/flutter-action@v2 (stable) | success |
 | Resolve packages (`flutter pub get`) | success |
 | Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success |
-| Analyze (`flutter analyze`) | success — **"No issues found! (ran in 6.6s)"** |
+| Analyze (`flutter analyze`) | success — **"No issues found! (ran in 5.6s)"** |
 | Test (`flutter test`) | success — **18 tests** across 8 files |
 | Build debug APK (`flutter build apk --debug`) | success — `mobile/build/app/outputs/flutter-apk/app-debug.apk` asserted non-empty |
 | Upload artifact `musiku-plus-debug-apk` | success — **84,320,526 bytes** (ZIP container, `if-no-files-found: error`) |
