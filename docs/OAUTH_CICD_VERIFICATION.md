@@ -3,7 +3,7 @@
 **Date:** 2026-11-24 (UTC) · **Branch:** `arena/47dd4ee9-musiku` · **PR:** [#2](https://github.com/HOOOOOOQ/MUSIKU-/pull/2)
 **Evidence commit:** `2d97b79` (Verify run **45362942971**, Android run **45362943525**) — the same result was observed on the four preceding green pairs (`0ec103b` 45361742621/45361742479, `58a6f42` 45360398512/45360398393, `5037fdd` 45359147433/45359147408, `b499117` 45357744692/45357744794)
 
-Every commit since the secrets were wired in has produced a green pair of runs; the four most recent are listed above, and `gh pr checks 2` reports all five checks passing.
+Every commit since the secrets were wired in has produced a green pair of runs; the four most recent are listed above. The documentation commits re-ran both workflows as well — at `f7db647` the pair is Verify run **45364241848** (audit, backend 169 tests, **Atlas live 13/13** at 4024 ms, admin) and Android run **45364242191** (analyze `No issues found!`, 9 test files / 25 declared tests, APK 163,425,048 bytes `sha256 95481e89…6cac`, **APK secret scan PASS**, artifact `musiku-plus-debug-apk` 84,326,971 bytes, release skipped). `gh pr checks 2` reports all five checks passing.
 
 This report records what was actually executed and what was observed, not what is intended. Every claim below is tied to a CI run, a command, or a test file. Where something could not be verified, it is listed as a blocker — nothing is reported as passing that did not run.
 
@@ -230,8 +230,8 @@ These cannot be closed from this repository or from CI; each needs owner action.
 | Area | Finding | Action taken |
 |---|---|---|
 | `.gitignore` | `.env`, `.env.*` (except `.env.example`), `*.jks`, `*.keystore`, `key.properties`, `local.properties`, `backend/tests/atlas/preflight.json`, `backend/ci-atlas.log`, `mobile/ci-logs/` ignored | Verified with `git check-ignore` |
-| Git history (24 commits) | Credential-pattern scan over **every** commit found only intentional placeholders (`USER:PASSWORD@cluster.mongodb.net` in `.env.example`, `user:pass@cluster…` in a test fixture). No sensitive filename was ever committed | Nothing to purge; see the rotation note below |
-| Backend env handling | zod schema + `superRefine` fail-closed at startup: rejects identical JWT secrets, a Google secret without a client ID, `GOOGLE_ACCEPT_ANDROID_AUDIENCE` without `GOOGLE_CLIENT_ID`, non-`mongodb+srv` in production, weak/placeholder values; provider groups are partial-by-design so one missing credential cannot silently disable others | Implemented; 8 env-validation tests |
+| Git history (every commit, `git rev-list --all`) | Credential-pattern scan over **every** commit found only intentional placeholders (`USER:PASSWORD@cluster.mongodb.net` in `.env.example`, `user:pass@cluster…` in a test fixture). No sensitive filename was ever committed | Nothing to purge; see the rotation note below |
+| Backend env handling | zod schema + `superRefine` fail-closed at startup: rejects identical JWT secrets, a Google secret without a client ID, `GOOGLE_ACCEPT_ANDROID_AUDIENCE` without `GOOGLE_CLIENT_ID`, non-`mongodb+srv` in production, weak/placeholder values; provider groups are partial-by-design so one missing credential cannot silently disable others | Implemented; 19 env-validation tests (including 11 for `validateMongoUri` and the new coherence rules) |
 | Secret logging | The only URI logging path goes through `redactMongoUri` (host/db/scheme only). No `console.*` prints a secret, token or password anywhere in `backend/src` | Verified by grep |
 | Flutter build config | Exactly three build-time reads (`API_BASE_URL`, legacy `API_URL`, `GOOGLE_WEB_CLIENT_ID`); no database or JWT material | Asserted by `mobile/test/build_config_test.dart` |
 | Actions logs | No `echo` of secrets; per-step `env:` scoping; audit/report scripts print names, booleans, shapes and counts only; annotations are emitted by scripts that redact any `mongodb://…` substring from driver messages | Verified by reading both workflows |
@@ -278,6 +278,7 @@ gh run view 45362943525 --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"' 
 JOB=$(gh run view 45362942971 --json jobs --jq '.jobs[] | select(.name=="MongoDB Atlas integration") | .databaseId')
 gh api repos/HOOOOOOQ/MUSIKU-/check-runs/$JOB/annotations --jq '.[].message'
 gh api repos/HOOOOOOQ/MUSIKU-/actions/runs/45362943525/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
+gh pr checks 2   # all five checks (audit, backend, Atlas, admin, android) must read "pass"
 ```
 
 Related documents: [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) · [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md) · [VERIFICATION.md](VERIFICATION.md) · [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md) · [DEPLOYMENT.md](DEPLOYMENT.md)
