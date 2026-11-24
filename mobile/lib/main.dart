@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:audio_service/audio_service.dart';
 import 'core/api.dart';
 import 'features/auth_action.dart';
+import 'features/account_security.dart';
 import 'core/audio.dart';
 import 'features/screens.dart';
 
@@ -27,6 +28,10 @@ final router = GoRouter(
   routes: [
     GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+    GoRoute(
+      path: '/account-security',
+      builder: (_, __) => const AccountSecurityScreen(),
+    ),
     GoRoute(path: '/auth-action', builder: (_, __) => const AuthActionScreen()),
     GoRoute(path: '/login', builder: (_, __) => const AuthScreen()),
     GoRoute(path: '/', builder: (_, __) => const HomeScreen()),

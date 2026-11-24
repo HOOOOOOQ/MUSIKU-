@@ -745,6 +745,10 @@ class ProfileScreen extends ConsumerWidget {
     title: 'Profil & Pengaturan',
     child: ListView(
       children: [
+        ListTile(
+          title: const Text('Keamanan akun & sesi'),
+          onTap: () => context.push('/account-security'),
+        ),
         Remote(
           path: '/auth/me',
           builder: (data) => Padding(
