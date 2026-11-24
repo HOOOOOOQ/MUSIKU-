@@ -1,10 +1,10 @@
-/// Animeku detail screen: metadata, episode list and library actions.
-///
-/// The screen is deliberately null-safe: the provider may omit the synopsis,
-/// the studio, the rating, the genres or the whole episode list, and every one
-/// of those is rendered as "not available" instead of crashing or inventing
-/// data. Episode numbering and ordering come from the backend, which does not
-/// trust the provider's `episode` field.
+// Animeku detail screen: metadata, episode list and library actions.
+//
+// The screen is deliberately null-safe: the provider may omit the synopsis,
+// the studio, the rating, the genres or the whole episode list, and every one
+// of those is rendered as "not available" instead of crashing or inventing
+// data. Episode numbering and ordering come from the backend, which does not
+// trust the provider's `episode` field.
 // Material compatibility export retained for supported Flutter stable versions.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';

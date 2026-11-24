@@ -1,16 +1,17 @@
-/// Animeku — the anime section of MUSIKU+.
-///
-/// Branding: the app is MUSIKU+, the section is **Animeku**, and the upstream
-/// catalog provider is internally called **Animasu**. The provider name never
-/// reaches the UI copy; it only appears in diagnostics.
-///
-/// Everything on these screens is served by the backend (`/anime/*`). Flutter
-/// never talks to MongoDB Atlas and never calls the provider directly.
-///
-/// Playback is conditional: the backend answers `playback: 'not_authorized'`
-/// (and 403 `STREAM_NOT_AUTHORIZED` for media) on deployments that have not
-/// asserted distribution rights. The UI mirrors that honestly — metadata stays
-/// browsable, the play affordance is disabled and the reason is shown.
+// Animeku — the anime section of MUSIKU+.
+//
+// Branding: the app is MUSIKU+, the section is **Animeku**, and the upstream
+// catalog provider is internally called **Animasu**. The provider name never
+// reaches the UI copy; it only appears in diagnostics.
+//
+// Everything on these screens is served by the backend (`/anime/*`). Flutter
+// never talks to MongoDB Atlas and never calls the provider directly.
+//
+// Playback is conditional: the backend answers `playback: 'not_authorized'`
+// (and 403 `STREAM_NOT_AUTHORIZED` for media) on deployments that have not
+// asserted distribution rights. The UI mirrors that honestly — metadata stays
+// browsable, the play affordance is disabled and the reason is shown.
+import 'dart:async';
 // Material compatibility export retained for supported Flutter stable versions.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
@@ -890,9 +891,8 @@ class AnimekuHomeScreen extends ConsumerWidget {
           final days = asList(schedule['days']);
           final today = pickScheduleDay(days);
           return RefreshIndicator(
-            onRefresh: () async {
-              await ref.refresh(animekuHomeProvider.future);
-            },
+            onRefresh: () =>
+                ref.refresh(animekuHomeProvider.future).then((_) {}),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 24),

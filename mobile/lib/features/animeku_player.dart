@@ -1,15 +1,15 @@
-/// Animeku video player.
-///
-/// Contract with the backend:
-///  * media is resolved per playback session from `/anime/stream?episodeUrl=…`;
-///    the URL is temporary and is never written to local storage;
-///  * a 403 `STREAM_NOT_AUTHORIZED` means the deployment has not asserted
-///    distribution rights — the player shows that honestly and offers no media;
-///  * HTTP 200 is not proof of playable media: the controller must initialize
-///    and stay error-free, otherwise the retry / alternative-source path is
-///    offered instead of a black rectangle;
-///  * progress is checkpointed every 15 s, on lifecycle loss and on exit, so
-///    "continue watching" survives a killed app.
+// Animeku video player.
+//
+// Contract with the backend:
+//  * media is resolved per playback session from `/anime/stream?episodeUrl=…`;
+//    the URL is temporary and is never written to local storage;
+//  * a 403 `STREAM_NOT_AUTHORIZED` means the deployment has not asserted
+//    distribution rights — the player shows that honestly and offers no media;
+//  * HTTP 200 is not proof of playable media: the controller must initialize
+//    and stay error-free, otherwise the retry / alternative-source path is
+//    offered instead of a black rectangle;
+//  * progress is checkpointed every 15 s, on lifecycle loss and on exit, so
+//    "continue watching" survives a killed app.
 import 'dart:async';
 // Material compatibility export retained for supported Flutter stable versions.
 // ignore: deprecated_member_use
