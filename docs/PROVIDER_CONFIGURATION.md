@@ -32,3 +32,5 @@ Use Stripe test credentials and CLI/test webhook tooling against a reachable bac
 ## Startup and infrastructure
 
 Configure Atlas least-privilege account/network/TLS, unique JWT secrets, CORS origins and admin seed password. Run db:init before traffic. googleId now has a unique sparse index; audit existing duplicates before changing the index on a populated deployment. Secrets/keys must never be pasted into chat. Set them through hosting/Google/Stripe/GitHub secret UIs.
+
+Admin integration health also fetches sanitized status for this repository's Android workflow on **main** from GitHub's API, with a 60-second server cache and 4-second timeout. Public repos need no token if rate budget permits. Private repos may set backend-only `GITHUB_BUILD_TOKEN` (fine-grained, Actions read only, scoped to this repo). The token, raw response and arbitrary caller-selected URLs are never exposed. Unavailable status is explicitly reported; the display does not claim the current PR build matches main.
