@@ -64,7 +64,13 @@ void resource(BuildContext context, String title, String path) => context.push(
 );
 
 /// Routes of the five primary tabs, in navigation order.
-const List<String> tabRoutes = ['/', '/browse/music', '/animeku', '/library', '/profile'];
+const List<String> tabRoutes = [
+  '/',
+  '/browse/music',
+  '/animeku',
+  '/library',
+  '/profile',
+];
 
 /// App shell: app bar, content and the five-tab bottom navigation
 /// (Home, Explore, Animeku, Library, Profile). `index` marks the active tab so
@@ -94,7 +100,10 @@ class Frame extends StatelessWidget {
           icon: Icon(Icons.explore_outlined),
           label: 'Explore',
         ),
-        NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Animeku'),
+        NavigationDestination(
+          icon: Icon(Icons.movie_outlined),
+          label: 'Animeku',
+        ),
         NavigationDestination(
           icon: Icon(Icons.library_music),
           label: 'Library',

@@ -531,94 +531,88 @@ class PlayerControls extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<VideoPlayerValue>(
-        valueListenable: player,
-        builder: (context, value, _) {
-          final duration = value.duration.inSeconds;
-          final position = value.position.inSeconds;
-          return Container(
-            color: Colors.black,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<VideoPlayerValue>(
+    valueListenable: player,
+    builder: (context, value, _) {
+      final duration = value.duration.inSeconds;
+      final position = value.position.inSeconds;
+      return Container(
+        color: Colors.black,
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (value.isBuffering) const LinearProgressIndicator(minHeight: 2),
+            Slider(
+              value: duration > 0 ? position.clamp(0, duration).toDouble() : 0,
+              max: duration > 0 ? duration.toDouble() : 1,
+              onChanged: duration > 0
+                  ? (next) => player.seekTo(Duration(seconds: next.toInt()))
+                  : null,
+            ),
+            Row(
               children: [
-                if (value.isBuffering)
-                  const LinearProgressIndicator(minHeight: 2),
-                Slider(
-                  value: duration > 0
-                      ? position.clamp(0, duration).toDouble()
-                      : 0,
-                  max: duration > 0 ? duration.toDouble() : 1,
-                  onChanged: duration > 0
-                      ? (next) => player.seekTo(
-                          Duration(seconds: next.toInt()),
-                        )
-                      : null,
+                Text(
+                  formatDuration(value.position),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                Row(
-                  children: [
-                    Text(
-                      formatDuration(value.position),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const Spacer(),
-                    Text(
-                      duration > 0 ? formatDuration(value.duration) : '--:--',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(
-                      tooltip: 'Kembali ke detail',
-                      icon: const Icon(Icons.playlist_play),
-                      onPressed: onExit,
-                    ),
-                    IconButton(
-                      tooltip: 'Episode sebelumnya',
-                      icon: const Icon(Icons.skip_previous),
-                      onPressed: hasPrevious ? onPrevious : null,
-                    ),
-                    IconButton(
-                      tooltip: 'Mundur 10 detik',
-                      icon: const Icon(Icons.replay_10),
-                      onPressed: () => onSkip(-10),
-                    ),
-                    IconButton.filled(
-                      tooltip: value.isPlaying ? 'Jeda' : 'Putar',
-                      iconSize: 36,
-                      icon: Icon(
-                        value.isPlaying ? Icons.pause : Icons.play_arrow,
-                      ),
-                      onPressed: onTogglePlayback,
-                    ),
-                    IconButton(
-                      tooltip: 'Maju 10 detik',
-                      icon: const Icon(Icons.forward_10),
-                      onPressed: () => onSkip(10),
-                    ),
-                    IconButton(
-                      tooltip: 'Episode berikutnya',
-                      icon: const Icon(Icons.skip_next),
-                      onPressed: hasNext ? onNext : null,
-                    ),
-                    IconButton(
-                      tooltip: fullscreen ? 'Keluar layar penuh' : 'Layar penuh',
-                      icon: Icon(
-                        fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                      ),
-                      onPressed: onToggleFullscreen,
-                    ),
-                  ],
+                const Spacer(),
+                Text(
+                  duration > 0 ? formatDuration(value.duration) : '--:--',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
-          );
-        },
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  tooltip: 'Kembali ke detail',
+                  icon: const Icon(Icons.playlist_play),
+                  onPressed: onExit,
+                ),
+                IconButton(
+                  tooltip: 'Episode sebelumnya',
+                  icon: const Icon(Icons.skip_previous),
+                  onPressed: hasPrevious ? onPrevious : null,
+                ),
+                IconButton(
+                  tooltip: 'Mundur 10 detik',
+                  icon: const Icon(Icons.replay_10),
+                  onPressed: () => onSkip(-10),
+                ),
+                IconButton.filled(
+                  tooltip: value.isPlaying ? 'Jeda' : 'Putar',
+                  iconSize: 36,
+                  icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
+                  onPressed: onTogglePlayback,
+                ),
+                IconButton(
+                  tooltip: 'Maju 10 detik',
+                  icon: const Icon(Icons.forward_10),
+                  onPressed: () => onSkip(10),
+                ),
+                IconButton(
+                  tooltip: 'Episode berikutnya',
+                  icon: const Icon(Icons.skip_next),
+                  onPressed: hasNext ? onNext : null,
+                ),
+                IconButton(
+                  tooltip: fullscreen ? 'Keluar layar penuh' : 'Layar penuh',
+                  icon: Icon(
+                    fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                  ),
+                  onPressed: onToggleFullscreen,
+                ),
+              ],
+            ),
+          ],
+        ),
       );
+    },
+  );
 }
 
 /// Horizontal episode chooser shown under the player in portrait mode.
@@ -638,9 +632,7 @@ class EpisodeStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (episodes.isEmpty) {
-      return const AnimekuEmptyState(
-        message: 'Daftar episode tidak tersedia.',
-      );
+      return const AnimekuEmptyState(message: 'Daftar episode tidak tersedia.');
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),

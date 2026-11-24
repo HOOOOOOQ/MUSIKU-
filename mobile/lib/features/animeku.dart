@@ -24,9 +24,8 @@ import 'screens.dart' show Frame, action;
 /* ─────────────────────────── pure helpers ─────────────────────────── */
 
 /// Normalizes any decoded JSON value into a string-keyed map.
-Map<String, dynamic> asMap(dynamic value) => value is Map
-    ? Map<String, dynamic>.from(value)
-    : <String, dynamic>{};
+Map<String, dynamic> asMap(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 /// Normalizes any decoded JSON value into a list of maps.
 ///
@@ -203,7 +202,8 @@ int resumePositionSec(
     if (row['completed'] == true) continue;
     final episode = historyEpisodeOf(row);
     final matchesNumber =
-        episodeNumber > 0 && numberOf(row['episodeNumber']).toInt() == episodeNumber;
+        episodeNumber > 0 &&
+        numberOf(row['episodeNumber']).toInt() == episodeNumber;
     final matchesUrl =
         episodeUrl.isNotEmpty && episodeUrlOf(episode) == episodeUrl;
     if (matchesNumber || matchesUrl) {
@@ -242,13 +242,13 @@ String animekuListRoute(String kind, {String title = '', String type = ''}) {
 
 /* ─────────────────────────── providers ─────────────────────────── */
 
-final animekuStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
-  ref,
-) async => asMap(await ref.watch(apiProvider).get('/anime/status')));
+final animekuStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) async => asMap(await ref.watch(apiProvider).get('/anime/status')),
+);
 
-final animekuHomeProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
-  ref,
-) async => asMap(await ref.watch(apiProvider).get('/anime/home')));
+final animekuHomeProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) async => asMap(await ref.watch(apiProvider).get('/anime/home')),
+);
 
 /// `key` is `'<kind>:<page>[:<type>]'` with kind = ongoing | completed | popular.
 final animekuListProvider = FutureProvider.autoDispose
@@ -289,8 +289,7 @@ final animekuSearchProvider = FutureProvider.autoDispose
 final animekuDetailsProvider = FutureProvider.autoDispose
     .family<Map<String, dynamic>, String>((ref, link) async {
       if (link.isEmpty) return <String, dynamic>{};
-      final path =
-          '/anime/details?link=${Uri.encodeQueryComponent(link)}';
+      final path = '/anime/details?link=${Uri.encodeQueryComponent(link)}';
       return asMap(await ref.watch(apiProvider).get(path));
     });
 
@@ -311,10 +310,15 @@ final animekuWatchlistProvider = FutureProvider.autoDispose
     .family<List<Map<String, dynamic>>, String>((ref, animeId) async {
       if (animeId.isEmpty) return <Map<String, dynamic>>[];
       try {
-        final entries = asList(await ref.watch(apiProvider).get('/library/watchlist'));
+        final entries = asList(
+          await ref.watch(apiProvider).get('/library/watchlist'),
+        );
         return entries
-            .where((entry) => animeIdOf(historyAnimeOf(entry)) == animeId ||
-                textOf(entry['anime']) == animeId)
+            .where(
+              (entry) =>
+                  animeIdOf(historyAnimeOf(entry)) == animeId ||
+                  textOf(entry['anime']) == animeId,
+            )
             .toList();
       } catch (_) {
         return <Map<String, dynamic>>[];
@@ -347,7 +351,9 @@ final animekuHistoryProvider = FutureProvider.autoDispose
         return asList(
           await ref
               .watch(apiProvider)
-              .get('/history/anime?animeId=${Uri.encodeQueryComponent(animeId)}'),
+              .get(
+                '/history/anime?animeId=${Uri.encodeQueryComponent(animeId)}',
+              ),
         );
       } catch (_) {
         return <Map<String, dynamic>>[];
@@ -421,9 +427,8 @@ class AnimekuPoster extends StatelessWidget {
                   : CachedNetworkImage(
                       imageUrl: poster,
                       fit: BoxFit.cover,
-                      placeholder:
-                          (_, __) =>
-                              const AnimekuSkeleton(height: double.infinity),
+                      placeholder: (_, __) =>
+                          const AnimekuSkeleton(height: double.infinity),
                       errorWidget: (_, __, ___) => ColoredBox(
                         color: theme.colorScheme.surfaceContainerHighest,
                         child: const Center(
@@ -480,11 +485,12 @@ class AnimekuPosterRail extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 20, 8, 8),
           child: Row(
             children: [
-              Expanded(
-                child: Text(title, style: theme.textTheme.titleMedium),
-              ),
+              Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
               if (onSeeAll != null)
-                TextButton(onPressed: onSeeAll, child: const Text('Lihat semua')),
+                TextButton(
+                  onPressed: onSeeAll,
+                  child: const Text('Lihat semua'),
+                ),
             ],
           ),
         ),
@@ -554,9 +560,8 @@ class AnimekuEpisodeCard extends StatelessWidget {
                       CachedNetworkImage(
                         imageUrl: poster,
                         fit: BoxFit.cover,
-                        placeholder:
-                            (_, __) =>
-                                const AnimekuSkeleton(height: double.infinity),
+                        placeholder: (_, __) =>
+                            const AnimekuSkeleton(height: double.infinity),
                         errorWidget: (_, __, ___) => ColoredBox(
                           color: theme.colorScheme.surfaceContainerHighest,
                         ),
@@ -617,7 +622,11 @@ class EpisodeProgressBar extends StatelessWidget {
 class AnimekuHistoryRail extends StatelessWidget {
   final String title;
   final List<Map<String, dynamic>> rows;
-  const AnimekuHistoryRail({super.key, required this.title, required this.rows});
+  const AnimekuHistoryRail({
+    super.key,
+    required this.title,
+    required this.rows,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -643,12 +652,11 @@ class AnimekuHistoryRail extends StatelessWidget {
               final episodeUrl = episodeUrlOf(episode);
               final number = numberOf(row['episodeNumber']).toInt();
               final link = animeLinkOf(anime);
-              final label =
-                  row['completed'] == true
-                      ? 'Selesai'
-                      : number > 0
-                      ? 'Episode $number'
-                      : 'Terakhir ditonton';
+              final label = row['completed'] == true
+                  ? 'Selesai'
+                  : number > 0
+                  ? 'Episode $number'
+                  : 'Terakhir ditonton';
               return AnimekuEpisodeCard(
                 anime: anime,
                 label: label,
@@ -699,11 +707,7 @@ class PlaybackNotice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 20,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(Icons.info_outline, size: 20, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -810,7 +814,11 @@ class AnimekuEmptyState extends StatelessWidget {
 class AnimekuErrorState extends StatelessWidget {
   final Object error;
   final VoidCallback onRetry;
-  const AnimekuErrorState({super.key, required this.error, required this.onRetry});
+  const AnimekuErrorState({
+    super.key,
+    required this.error,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -915,8 +923,9 @@ class AnimekuHomeScreen extends ConsumerWidget {
                 AnimekuPosterRail(
                   title: 'Populer',
                   items: asList(payload['popular']),
-                  onSeeAll: () =>
-                      context.push(animekuListRoute('popular', title: 'Populer')),
+                  onSeeAll: () => context.push(
+                    animekuListRoute('popular', title: 'Populer'),
+                  ),
                 ),
                 AnimekuPosterRail(
                   title: 'Selesai tayang',
@@ -1049,7 +1058,9 @@ class _ScheduleSectionState extends State<ScheduleSection> {
               final entry = widget.days[index];
               final key = textOf(entry['key']);
               return ChoiceChip(
-                label: Text(textOf(entry['label']).isEmpty ? key : textOf(entry['label'])),
+                label: Text(
+                  textOf(entry['label']).isEmpty ? key : textOf(entry['label']),
+                ),
                 selected: key == textOf(day['key']),
                 onSelected: (_) => setState(() => selectedKey = key),
               );
@@ -1136,9 +1147,9 @@ class _AnimekuListState extends ConsumerState<AnimekuListScreen> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Gagal memuat lebih banyak')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal memuat lebih banyak')),
+        );
       }
     } finally {
       if (mounted) setState(() => loadingMore = false);
@@ -1301,7 +1312,11 @@ class _AnimekuSearchState extends ConsumerState<AnimekuSearchScreen> {
     try {
       final next = asMap(
         await ref.read(
-          animekuSearchProvider((query: query, type: type, page: page + 1)).future,
+          animekuSearchProvider((
+            query: query,
+            type: type,
+            page: page + 1,
+          )).future,
         ),
       );
       if (mounted) {

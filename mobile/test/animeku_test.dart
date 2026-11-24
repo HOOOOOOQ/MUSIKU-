@@ -73,7 +73,9 @@ class FakeApi extends Api {
     sent.add(<String, dynamic>{
       'method': method,
       'path': path,
-      'data': data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+      'data': data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{},
     });
     return <String, dynamic>{'ok': true};
   }
@@ -94,75 +96,74 @@ Map<String, dynamic> anime(String title, String link, {String type = 'TV'}) =>
       'latestEpisode': <String, dynamic>{'text': 'Episode 12', 'number': 12},
     };
 
-Map<String, dynamic> homePayload({String playback = 'not_authorized'}) =>
+Map<String, dynamic> homePayload({
+  String playback = 'not_authorized',
+}) => <String, dynamic>{
+  'status': <String, dynamic>{
+    'provider': 'animasu',
+    'displayName': 'Animeku',
+    'enabled': true,
+    'playback': playback,
+    'types': <String>['TV', 'Movie'],
+  },
+  'featured': <Map<String, dynamic>>[anime('Frieren', '/anime/frieren')],
+  'popular': <Map<String, dynamic>>[anime('One Piece', '/anime/one-piece')],
+  'ongoing': <Map<String, dynamic>>[anime('Solo Leveling', '/anime/solo')],
+  'completed': <Map<String, dynamic>>[anime('Naruto', '/anime/naruto')],
+  'latestEpisodes': <Map<String, dynamic>>[
     <String, dynamic>{
-      'status': <String, dynamic>{
-        'provider': 'animasu',
-        'displayName': 'Animeku',
-        'enabled': true,
-        'playback': playback,
-        'types': <String>['TV', 'Movie'],
+      'anime': anime('Solo Leveling', '/anime/solo'),
+      'label': 'Episode 4',
+    },
+  ],
+  'schedule': <String, dynamic>{
+    'shape': 'object',
+    'totalDays': 7,
+    'days': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'key': 'all',
+        'label': 'Semua',
+        'items': <Map<String, dynamic>>[anime('All item', '/anime/all')],
       },
-      'featured': <Map<String, dynamic>>[anime('Frieren', '/anime/frieren')],
-      'popular': <Map<String, dynamic>>[anime('One Piece', '/anime/one-piece')],
-      'ongoing': <Map<String, dynamic>>[anime('Solo Leveling', '/anime/solo')],
-      'completed': <Map<String, dynamic>>[anime('Naruto', '/anime/naruto')],
-      'latestEpisodes': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'anime': anime('Solo Leveling', '/anime/solo'),
-          'label': 'Episode 4',
-        },
-      ],
-      'schedule': <String, dynamic>{
-        'shape': 'object',
-        'totalDays': 7,
-        'days': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'key': 'all',
-            'label': 'Semua',
-            'items': <Map<String, dynamic>>[anime('All item', '/anime/all')],
-          },
-          <String, dynamic>{
-            'key': todayScheduleKey(),
-            'label': 'Hari ini',
-            'items': <Map<String, dynamic>>[
-              anime('Today item', '/anime/today'),
-            ],
-          },
-        ],
+      <String, dynamic>{
+        'key': todayScheduleKey(),
+        'label': 'Hari ini',
+        'items': <Map<String, dynamic>>[anime('Today item', '/anime/today')],
       },
-      'continueWatching': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'anime': anime('Frieren', '/anime/frieren'),
-          'episode': <String, dynamic>{
-            '_id': 'ep-1',
-            'providerEpisodeId': '/episode/frieren-3',
-          },
-          'episodeNumber': 3,
-          'positionSec': 300,
-          'durationSec': 1200,
-          'completed': false,
-        },
-      ],
-      'watchlist': <Map<String, dynamic>>[
-        <String, dynamic>{
-          '_id': 'wl-1',
-          'anime': anime('Naruto', '/anime/naruto'),
-          'status': 'plan_to_watch',
-        },
-      ],
-      'history': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'anime': anime('One Piece', '/anime/one-piece'),
-          'episode': <String, dynamic>{'providerEpisodeId': '/episode/op-1'},
-          'episodeNumber': 1,
-          'positionSec': 60,
-          'durationSec': 1200,
-          'completed': true,
-        },
-      ],
-      'favorites': <Map<String, dynamic>>[],
-    };
+    ],
+  },
+  'continueWatching': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'anime': anime('Frieren', '/anime/frieren'),
+      'episode': <String, dynamic>{
+        '_id': 'ep-1',
+        'providerEpisodeId': '/episode/frieren-3',
+      },
+      'episodeNumber': 3,
+      'positionSec': 300,
+      'durationSec': 1200,
+      'completed': false,
+    },
+  ],
+  'watchlist': <Map<String, dynamic>>[
+    <String, dynamic>{
+      '_id': 'wl-1',
+      'anime': anime('Naruto', '/anime/naruto'),
+      'status': 'plan_to_watch',
+    },
+  ],
+  'history': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'anime': anime('One Piece', '/anime/one-piece'),
+      'episode': <String, dynamic>{'providerEpisodeId': '/episode/op-1'},
+      'episodeNumber': 1,
+      'positionSec': 60,
+      'durationSec': 1200,
+      'completed': true,
+    },
+  ],
+  'favorites': <Map<String, dynamic>>[],
+};
 
 Widget wrap(Widget child, FakeApi api) => ProviderScope(
   overrides: [apiProvider.overrideWithValue(api)],
@@ -171,11 +172,7 @@ Widget wrap(Widget child, FakeApi api) => ProviderScope(
 
 /// Animeku screens are long scrolling lists; a tall test surface keeps every
 /// rail in the tree so finders see the whole screen instead of the first fold.
-Future<void> pumpScreen(
-  WidgetTester tester,
-  Widget child,
-  FakeApi api,
-) async {
+Future<void> pumpScreen(WidgetTester tester, Widget child, FakeApi api) async {
   tester.view.physicalSize = const Size(1400, 7000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -198,9 +195,14 @@ void main() {
       expect(asMap(<String, dynamic>{'a': 1})['a'], 1);
       expect(asMap(null), <String, dynamic>{});
       expect(asMap('text'), <String, dynamic>{});
-      expect(asList(<Map<String, dynamic>>[<String, dynamic>{'x': 1}]), [
-        <String, dynamic>{'x': 1},
-      ]);
+      expect(
+        asList(<Map<String, dynamic>>[
+          <String, dynamic>{'x': 1},
+        ]),
+        [
+          <String, dynamic>{'x': 1},
+        ],
+      );
       expect(asList(<String, dynamic>{'items': <Map<String, dynamic>>[]}), []);
       expect(asList(<String, dynamic>{'days': <Map<String, dynamic>>[]}), []);
       expect(asList('junk'), []);
@@ -225,7 +227,10 @@ void main() {
       );
       expect(
         latestEpisodeOf(<String, dynamic>{
-          'latestEpisode': <String, dynamic>{'text': 'Episode 12', 'number': 12},
+          'latestEpisode': <String, dynamic>{
+            'text': 'Episode 12',
+            'number': 12,
+          },
         }),
         'Episode 12',
       );
@@ -246,7 +251,11 @@ void main() {
 
     test('subtitle lists only the metadata the provider actually sent', () {
       expect(
-        animeSubtitleOf(<String, dynamic>{'type': 'TV', 'status': 'Ongoing', 'rating': 8.5}),
+        animeSubtitleOf(<String, dynamic>{
+          'type': 'TV',
+          'status': 'Ongoing',
+          'rating': 8.5,
+        }),
         'TV · Ongoing · ★ 8.5',
       );
       expect(animeSubtitleOf(<String, dynamic>{'rating': 0}), '');
@@ -259,7 +268,10 @@ void main() {
         'Episode 4',
       );
       expect(
-        episodeLabelOf(<String, dynamic>{'number': 4, 'label': 'Episode 4 Sub'}),
+        episodeLabelOf(<String, dynamic>{
+          'number': 4,
+          'label': 'Episode 4 Sub',
+        }),
         'Episode 4 Sub',
       );
       expect(episodeLabelOf(<String, dynamic>{}), 'Episode');
@@ -275,7 +287,11 @@ void main() {
 
     test('history rows expose the populated anime and episode documents', () {
       final row = <String, dynamic>{
-        'anime': <String, dynamic>{'_id': 'a1', 'title': 'Frieren', 'link': '/f'},
+        'anime': <String, dynamic>{
+          '_id': 'a1',
+          'title': 'Frieren',
+          'link': '/f',
+        },
         'episode': <String, dynamic>{'providerEpisodeId': '/ep/3'},
         'positionSec': 300,
         'durationSec': 1200,
@@ -301,15 +317,30 @@ void main() {
 
     test('the schedule day falls back today → all → first non-empty', () {
       final days = <Map<String, dynamic>>[
-        <String, dynamic>{'key': 'all', 'label': 'Semua', 'items': <Map<String, dynamic>>[]},
-        <String, dynamic>{'key': 'rabu', 'label': 'Rabu', 'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'x'}]},
+        <String, dynamic>{
+          'key': 'all',
+          'label': 'Semua',
+          'items': <Map<String, dynamic>>[],
+        },
+        <String, dynamic>{
+          'key': 'rabu',
+          'label': 'Rabu',
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{'title': 'x'},
+          ],
+        },
       ];
       expect(pickScheduleDay(days, 'rabu')['key'], 'rabu');
       expect(pickScheduleDay(days, 'senin')['key'], 'all');
       expect(
         pickScheduleDay(<Map<String, dynamic>>[
           <String, dynamic>{'key': 'all', 'items': <Map<String, dynamic>>[]},
-          <String, dynamic>{'key': 'kamis', 'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'y'}]},
+          <String, dynamic>{
+            'key': 'kamis',
+            'items': <Map<String, dynamic>>[
+              <String, dynamic>{'title': 'y'},
+            ],
+          },
         ], 'senin')['key'],
         'kamis',
       );
@@ -345,10 +376,23 @@ void main() {
         },
       ];
       expect(resumePositionSec(history, episodeNumber: 4, episodeUrl: ''), 90);
-      expect(resumePositionSec(history, episodeNumber: 0, episodeUrl: '/ep/4'), 90);
+      expect(
+        resumePositionSec(history, episodeNumber: 0, episodeUrl: '/ep/4'),
+        90,
+      );
       // A completed episode starts over instead of resuming at the end.
-      expect(resumePositionSec(history, episodeNumber: 3, episodeUrl: '/ep/3'), 0);
-      expect(resumePositionSec(<Map<String, dynamic>>[], episodeNumber: 1, episodeUrl: ''), 0);
+      expect(
+        resumePositionSec(history, episodeNumber: 3, episodeUrl: '/ep/3'),
+        0,
+      );
+      expect(
+        resumePositionSec(
+          <Map<String, dynamic>>[],
+          episodeNumber: 1,
+          episodeUrl: '',
+        ),
+        0,
+      );
     });
 
     test('provider error codes are read from the API envelope', () {
@@ -367,7 +411,11 @@ void main() {
         '/animeku/anime?link=%2Fanime%2Fjujutsu+kaisen',
       );
       expect(
-        animekuWatchRoute(link: '/anime/a', episodeUrl: '/episode/a-1', number: 7),
+        animekuWatchRoute(
+          link: '/anime/a',
+          episodeUrl: '/episode/a-1',
+          number: 7,
+        ),
         '/animeku/watch?link=%2Fanime%2Fa&episodeUrl=%2Fepisode%2Fa-1&number=7',
       );
       expect(animekuListRoute('ongoing'), '/animeku/list?kind=ongoing');
@@ -388,14 +436,23 @@ void main() {
 
     test('the episode ordering note states where numbers came from', () {
       expect(
-        orderingNote(<String, dynamic>{'numberSource': 'title', 'reversed': true}),
+        orderingNote(<String, dynamic>{
+          'numberSource': 'title',
+          'reversed': true,
+        }),
         'Nomor episode dibaca dari teks judul episode dan urutan dibalik menjadi naik.',
       );
       expect(
-        orderingNote(<String, dynamic>{'numberSource': 'index', 'reversed': false}),
+        orderingNote(<String, dynamic>{
+          'numberSource': 'index',
+          'reversed': false,
+        }),
         'Nomor episode dibaca dari urutan daftar.',
       );
-      expect(orderingNote(<String, dynamic>{}), 'Nomor episode dibaca dari provider.');
+      expect(
+        orderingNote(<String, dynamic>{}),
+        'Nomor episode dibaca dari provider.',
+      );
     });
   });
 
@@ -439,9 +496,7 @@ void main() {
     testWidgets('shows a retry action when the catalog request fails', (
       tester,
     ) async {
-      final api = FakeApi(<String, dynamic>{
-        '/anime/home': offlineError(),
-      });
+      final api = FakeApi(<String, dynamic>{'/anime/home': offlineError()});
       await pumpScreen(tester, const AnimekuHomeScreen(), api);
       expect(find.text('Coba lagi'), findsOneWidget);
       expect(find.text('Sorotan'), findsNothing);
@@ -476,12 +531,18 @@ void main() {
       // Empty query: recent searches instead of results.
       expect(find.text('Pencarian terakhir'), findsOneWidget);
       expect(find.text('frieren'), findsOneWidget);
-      expect(api.calls.where((call) => call.startsWith('/anime/search')), isEmpty);
+      expect(
+        api.calls.where((call) => call.startsWith('/anime/search')),
+        isEmpty,
+      );
 
       await tester.enterText(find.byType(TextField), 'frie');
       await tester.pump(const Duration(milliseconds: 100));
       // Still inside the debounce window: no request yet.
-      expect(api.calls.where((call) => call.startsWith('/anime/search')), isEmpty);
+      expect(
+        api.calls.where((call) => call.startsWith('/anime/search')),
+        isEmpty,
+      );
       await tester.pump(const Duration(milliseconds: 500));
       await settle(tester);
       expect(
@@ -525,58 +586,58 @@ void main() {
   });
 
   group('Animeku detail', () {
-    Map<String, dynamic> detailsPayload({String playback = 'not_authorized'}) =>
-        <String, dynamic>{
-          'anime': <String, dynamic>{
-            'id': 'a1',
-            '_id': 'a1',
-            'providerId': '/anime/jjk',
-            'title': 'Jujutsu Kaisen',
-            'link': '/anime/jjk',
-            'posterUrl': '',
-            'synopsis': 'Penyihir muda melawan kutukan.',
-            'type': 'TV',
-            'status': 'Ongoing',
-            'studio': 'MAPPA',
-            'rating': 8.6,
-            'episodeCount': 2,
-            'genres': <String>['Action', 'Supernatural'],
-            'latestEpisode': <String, dynamic>{'text': 'Episode 2', 'number': 2},
-          },
-          'episodes': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'number': 1,
-              'label': 'Episode 1',
-              'title': 'Ryoumen Sukuna',
-              'date': '2026-01-05',
-              'episodeUrl': '/episode/jjk-1',
-              'id': 'e1',
-            },
-            <String, dynamic>{
-              'number': 2,
-              'label': 'Episode 2',
-              'title': 'Fushiguro',
-              'date': '2026-01-12',
-              'episodeUrl': '/episode/jjk-2',
-              'id': 'e2',
-            },
-          ],
-          'episodeOrder': <String, dynamic>{
-            'reversed': true,
-            'numberSource': 'episode',
-          },
-          'playback': playback,
-        };
-
-    FakeApi detailsApi({String playback = 'not_authorized'}) => FakeApi(
-      <String, dynamic>{
-        '/anime/details': detailsPayload(playback: playback),
-        '/library/watchlist': <Map<String, dynamic>>[],
-        '/library/anime-favorites': <Map<String, dynamic>>[],
-        '/history/anime': <Map<String, dynamic>>[],
-        '/anime/a1/related': <Map<String, dynamic>>[],
+    Map<String, dynamic> detailsPayload({
+      String playback = 'not_authorized',
+    }) => <String, dynamic>{
+      'anime': <String, dynamic>{
+        'id': 'a1',
+        '_id': 'a1',
+        'providerId': '/anime/jjk',
+        'title': 'Jujutsu Kaisen',
+        'link': '/anime/jjk',
+        'posterUrl': '',
+        'synopsis': 'Penyihir muda melawan kutukan.',
+        'type': 'TV',
+        'status': 'Ongoing',
+        'studio': 'MAPPA',
+        'rating': 8.6,
+        'episodeCount': 2,
+        'genres': <String>['Action', 'Supernatural'],
+        'latestEpisode': <String, dynamic>{'text': 'Episode 2', 'number': 2},
       },
-    );
+      'episodes': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'number': 1,
+          'label': 'Episode 1',
+          'title': 'Ryoumen Sukuna',
+          'date': '2026-01-05',
+          'episodeUrl': '/episode/jjk-1',
+          'id': 'e1',
+        },
+        <String, dynamic>{
+          'number': 2,
+          'label': 'Episode 2',
+          'title': 'Fushiguro',
+          'date': '2026-01-12',
+          'episodeUrl': '/episode/jjk-2',
+          'id': 'e2',
+        },
+      ],
+      'episodeOrder': <String, dynamic>{
+        'reversed': true,
+        'numberSource': 'episode',
+      },
+      'playback': playback,
+    };
+
+    FakeApi detailsApi({String playback = 'not_authorized'}) =>
+        FakeApi(<String, dynamic>{
+          '/anime/details': detailsPayload(playback: playback),
+          '/library/watchlist': <Map<String, dynamic>>[],
+          '/library/anime-favorites': <Map<String, dynamic>>[],
+          '/history/anime': <Map<String, dynamic>>[],
+          '/anime/a1/related': <Map<String, dynamic>>[],
+        });
 
     testWidgets('lists episodes in ascending order with the ordering note', (
       tester,
@@ -602,9 +663,7 @@ void main() {
       final first = tester
           .getTopLeft(find.text('Ryoumen Sukuna · 2026-01-05'))
           .dy;
-      final second = tester
-          .getTopLeft(find.text('Fushiguro · 2026-01-12'))
-          .dy;
+      final second = tester.getTopLeft(find.text('Fushiguro · 2026-01-12')).dy;
       expect(first, lessThan(second));
     });
 
@@ -625,7 +684,10 @@ void main() {
         findsOneWidget,
       );
       // No media was requested from the backend.
-      expect(api.calls.where((call) => call.startsWith('/anime/stream')), isEmpty);
+      expect(
+        api.calls.where((call) => call.startsWith('/anime/stream')),
+        isEmpty,
+      );
     });
 
     testWidgets('the watchlist toggle posts the anime id', (tester) async {
@@ -651,7 +713,10 @@ void main() {
     ) async {
       final api = detailsApi();
       api.routes['/library/anime-favorites'] = <Map<String, dynamic>>[
-        <String, dynamic>{'_id': 'f1', 'anime': <String, dynamic>{'_id': 'a1'}},
+        <String, dynamic>{
+          '_id': 'f1',
+          'anime': <String, dynamic>{'_id': 'a1'},
+        },
       ];
       await pumpScreen(
         tester,
@@ -718,7 +783,10 @@ void main() {
       expect(find.text('Kembali ke detail'), findsOneWidget);
       expect(find.byType(VideoPlayer), findsNothing);
       // The refusal came from the backend, and no progress was invented.
-      expect(api.calls, contains('/anime/stream?episodeUrl=%2Fepisode%2Fjjk-1'));
+      expect(
+        api.calls,
+        contains('/anime/stream?episodeUrl=%2Fepisode%2Fjjk-1'),
+      );
       expect(api.sent, isEmpty);
     });
 

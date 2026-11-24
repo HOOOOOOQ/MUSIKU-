@@ -76,20 +76,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return episodes.isNotEmpty ? episodes.first : <String, dynamic>{};
   }
 
-  Future<void> toggleWatchlist(String animeId, bool inWatchlist, String entryId) =>
-      action(context, () async {
-        final api = ref.read(apiProvider);
-        if (inWatchlist && entryId.isNotEmpty) {
-          await api.send('/library/watchlist/$entryId', {}, method: 'DELETE');
-        } else {
-          await api.send('/library/watchlist', {
-            'animeId': animeId,
-            'status': 'plan_to_watch',
-          });
-        }
-        ref.invalidate(animekuWatchlistProvider(animeId));
-        ref.invalidate(animekuHomeProvider);
+  Future<void> toggleWatchlist(
+    String animeId,
+    bool inWatchlist,
+    String entryId,
+  ) => action(context, () async {
+    final api = ref.read(apiProvider);
+    if (inWatchlist && entryId.isNotEmpty) {
+      await api.send('/library/watchlist/$entryId', {}, method: 'DELETE');
+    } else {
+      await api.send('/library/watchlist', {
+        'animeId': animeId,
+        'status': 'plan_to_watch',
       });
+    }
+    ref.invalidate(animekuWatchlistProvider(animeId));
+    ref.invalidate(animekuHomeProvider);
+  });
 
   Future<void> toggleFavorite(String animeId, bool favorite) =>
       action(context, () async {
@@ -130,7 +133,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final poster = animePosterOf(anime);
     final synopsis = textOf(anime['synopsis']);
     final genres = (anime['genres'] is List)
-        ? (anime['genres'] as List).map(textOf).where((g) => g.isNotEmpty).toList()
+        ? (anime['genres'] as List)
+              .map(textOf)
+              .where((g) => g.isNotEmpty)
+              .toList()
         : const <String>[];
     final resume = resumeEpisode(history.value ?? const []);
     final resumeNumber = episodeNumberOf(resume);
@@ -162,10 +168,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       : CachedNetworkImage(
                           imageUrl: poster,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => const AnimekuSkeleton(
-                            width: 118,
-                            height: 168,
-                          ),
+                          placeholder: (_, __) =>
+                              const AnimekuSkeleton(width: 118, height: 168),
                           errorWidget: (_, __, ___) => ColoredBox(
                             color: theme.colorScheme.surfaceContainerHighest,
                             child: const Center(
@@ -264,7 +268,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   onPressed: () =>
                       setState(() => synopsisExpanded = !synopsisExpanded),
                   child: Text(
-                    synopsisExpanded ? 'Tampilkan lebih sedikit' : 'Selengkapnya',
+                    synopsisExpanded
+                        ? 'Tampilkan lebih sedikit'
+                        : 'Selengkapnya',
                   ),
                 ),
             ],
@@ -319,15 +325,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 onPressed: animeId.isEmpty
                     ? null
                     : () => toggleFavorite(animeId, isFavorite),
-                icon: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                ),
+                icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
                 label: Text(isFavorite ? 'Favorit' : 'Favoritkan'),
               ),
             ],
           ),
         ),
-        if (!playbackAuthorized) const PlaybackNotice(status: {'playback': 'not_authorized'}),
+        if (!playbackAuthorized)
+          const PlaybackNotice(status: {'playback': 'not_authorized'}),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
           child: Row(
@@ -403,7 +408,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       if (url.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Episode ini tidak punya sumber video.'),
+                            content: Text(
+                              'Episode ini tidak punya sumber video.',
+                            ),
                           ),
                         );
                         return;
@@ -430,7 +437,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 340,
-                  child: MediaList(items: related.value ?? const [], kind: 'anime'),
+                  child: MediaList(
+                    items: related.value ?? const [],
+                    kind: 'anime',
+                  ),
                 ),
               ],
             ),
