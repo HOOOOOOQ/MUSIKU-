@@ -1,0 +1,67 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final apiProvider = Provider((ref) => Api());
+final resourceProvider = FutureProvider.autoDispose.family<dynamic, String>((ref, path) => ref.watch(apiProvider).get(path));
+
+class Api {
+  final storage = const FlutterSecureStorage();
+  final Dio dio;
+  Future<void>? _refreshing;
+  Api({Dio? client}) : dio = client ?? Dio(BaseOptions(baseUrl: const String.fromEnvironment('API_URL', defaultValue: 'https://api.example.invalid/api'), connectTimeout: const Duration(seconds: 20), receiveTimeout: const Duration(seconds: 30))) {
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
+      final token = await storage.read(key: 'accessToken');
+      if (token != null) options.headers['Authorization'] = 'Bearer $token';
+      handler.next(options);
+    }, onError: (error, handler) async {
+      final options = error.requestOptions;
+      if (error.response?.statusCode == 401 && options.extra['retried'] != true && !options.path.startsWith('/auth/')) {
+        try {
+          await (_refreshing ??= _refresh());
+          options.extra['retried'] = true;
+          options.headers['Authorization'] = 'Bearer ${await storage.read(key: 'accessToken')}';
+          return handler.resolve(await dio.fetch<dynamic>(options));
+        } catch (_) {
+          await storage.delete(key: 'accessToken');
+          await storage.delete(key: 'refreshToken');
+        } finally { _refreshing = null; }
+      }
+      handler.next(error);
+    }));
+  }
+  Future<void> _refresh() async {
+    final token = await storage.read(key: 'refreshToken');
+    final result = await send('/auth/refresh', {'refreshToken': token});
+    await saveTokens(Map<String, dynamic>.from(result));
+  }
+  Future<void> saveTokens(Map<String, dynamic> tokens) async {
+    for (final key in ['accessToken', 'refreshToken']) {
+      if (tokens[key] is String) await storage.write(key: key, value: tokens[key] as String);
+    }
+  }
+  Future<dynamic> get(String path) async => (await dio.get<dynamic>(path)).data['data'];
+  Future<dynamic> send(String path, dynamic data, {String method = 'POST'}) async => (await dio.request<dynamic>(path, data: data, options: Options(method: method))).data['data'];
+  Future<void> login(String email, String password, {String? username}) async {
+    final result = await send(username == null ? '/auth/login' : '/auth/register', {'email': email, 'password': password, if (username != null) 'username': username});
+    await saveTokens(Map<String, dynamic>.from(result['tokens']));
+  }
+  Future<void> logout() async {
+    try { await send('/auth/logout', {'refreshToken': await storage.read(key: 'refreshToken')}); }
+    finally { await storage.delete(key: 'accessToken'); await storage.delete(key: 'refreshToken'); }
+  }
+}
+String errorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map) return data['error']?['message']?.toString() ?? 'Request failed';
+    return 'Tidak dapat terhubung. Periksa koneksi lalu coba lagi.';
+  }
+  return error.toString();
+}
+List<Map<String, dynamic>> records(dynamic data) {
+  if (data is List) return data.whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList();
+  if (data is Map) return records(data['items'] ?? data['tracks'] ?? data['trending'] ?? []);
+  return [];
+}
+String entityId(Map<String, dynamic> item) => (item['_id'] ?? '${item['source']}:${item['providerId']}').toString();
