@@ -23,6 +23,12 @@ The Atlas probe writes a uniquely tagged document to `_integration_probes`, read
 - `REDIS_URL` is reserved configuration; current provider cache uses bounded in-process memory, not an active Redis adapter, so provider rate budgets are per-instance only. Run multiple backend instances behind a load balancer only after adding distributed enforcement.
 - Optional backend-only `GITHUB_BUILD_TOKEN` (fine-grained, Actions read, this repository) lets the admin integration page show sanitized Android workflow status for `main`; it is never returned to the browser and public repositories can omit it.
 
+## Animeku
+
+Animeku metadata needs no credentials: `ANIMASU_BASE_URL` (must be an `https://` origin without embedded credentials — startup rejects anything else), `ANIMASU_ENABLED`, `ANIMASU_TIMEOUT_MS`, `ANIMASU_CACHE_TTL_SEC`, `ANIMASU_RATE_LIMIT_PER_MIN`. Seed creates the `animasu` provider record from these values; the admin **Animeku** page then manages enable/disable, priority, timeouts, cache TTL and rate limit.
+
+Video playback is a rights decision, not a configuration convenience. Keep `ANIMASU_STREAMING_AUTHORIZED=false` unless you hold or are granted redistribution rights for the media. To turn it on you must also set `ANIMASU_ALLOWED_STREAM_HOSTS` to the exact https hosts allowed to serve media (wildcards as `*.domain`); startup refuses the switch with an empty allowlist, because an allowlist-free deployment would resolve media from any host. Egress rules should permit only the configured provider origin and the allow-listed media hosts. Media URLs are temporary: never persisted (episode documents keep `streamUrl: ''`), never cached, never logged, never rendered by the admin dashboard, and only served to an authenticated MUSIKU+ session. With authorization off, `/anime/status` reports `playback: "not_authorized"` and media requests answer `403 STREAM_NOT_AUTHORIZED` — that is the expected, honest state, not a failure. See [ANIMEKU.md](ANIMEKU.md).
+
 ## Licensed media
 
 No licensed provider is selected by this repository. Obtain API documentation, territorial rights, audio/video redistribution and offline rights first. Implement the concrete adapter against that contract, map provider IDs safely, enforce user entitlement and validate stream expiration/DRM. Metadata API access does not grant full-track audio or video distribution rights. Check commercial terms and attribution requirements for every public metadata/lyrics/preview provider as well.
