@@ -10,6 +10,7 @@ const NAV = [
   { href: '/users', label: 'Users', icon: '◉' },
   { href: '/providers', label: 'API Providers', icon: '⬡' },
   { href: '/catalog', label: 'Catalog', icon: '▤' },
+  { href: '/animeku', label: 'Animeku', icon: '▶' },
   { href: '/subscriptions', label: 'Subscriptions', icon: '★' },
   { href: '/settings', label: 'Settings & Flags', icon: '⚙' },
   { href: '/logs', label: 'Logs & Audit', icon: '☰' },
