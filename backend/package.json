@@ -1,7 +1,7 @@
 {
   "name": "musiku-plus-api",
   "version": "1.0.0",
-  "description": "MUSIKU+ backend API — Node.js, Express, TypeScript, MongoDB Atlas (Mongoose)",
+  "description": "MUSIKU+ backend API \u2014 Node.js, Express, TypeScript, MongoDB Atlas (Mongoose)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "seed": "ts-node --transpile-only src/config/seed.ts",
     "db:init": "ts-node --transpile-only src/config/initDb.ts",
-    "test:atlas": "ts-node --transpile-only scripts/verify-atlas.ts"
+    "atlas:preflight": "ts-node --transpile-only scripts/atlas-preflight.ts",
+    "test:atlas": "ts-node --transpile-only scripts/verify-atlas.ts",
+    "test:atlas:integration": "npm run atlas:preflight && jest --runInBand --config jest.atlas.config.js"
   },
   "engines": {
     "node": ">=20"

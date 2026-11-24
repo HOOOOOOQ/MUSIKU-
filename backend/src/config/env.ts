@@ -11,13 +11,30 @@ import { z } from 'zod';
 export const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required (MongoDB Atlas connection string)'),
   MONGODB_DB_NAME: z.string().default('musiku_plus'),
+  // Isolated database used by the Atlas integration suite (never production data).
+  MONGODB_TEST_DB_NAME: z.string().default(''),
+  MONGODB_MAX_POOL_SIZE: z.coerce.number().int().min(1).max(200).default(20),
+  MONGODB_MIN_POOL_SIZE: z.coerce.number().int().min(0).max(50).default(2),
+  MONGODB_SERVER_SELECTION_TIMEOUT_MS: z.coerce.number().int().min(500).max(120000).default(10000),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
   JWT_REFRESH_EXPIRES: z.string().default('30d'),
+  // Grace window in which a duplicate presentation of an already-rotated refresh
+  // token is treated as a benign concurrent retry instead of token theft.
+  REFRESH_REUSE_GRACE_MS: z.coerce.number().int().min(0).max(300000).default(30000),
   GITHUB_BUILD_TOKEN: z.string().default(''),
+  // Android OAuth client ID (package com.musikuplus.app + SHA-1). It identifies
+  // the app to Google Play services; it is NOT an ID-token audience.
   GOOGLE_CLIENT_ID: z.string().optional().default(''),
+  // Web application OAuth client ID. This is the audience of ID tokens obtained
+  // by google_sign_in with serverClientId, so the backend verifies against it.
+  GOOGLE_WEB_CLIENT_ID: z.string().optional().default(''),
+  // Reserved for a future server-side authorization-code flow. Never sent to clients.
   GOOGLE_CLIENT_SECRET: z.string().optional().default(''),
+  // Set to 'true' only if ID tokens are also issued directly for the Android
+  // client (no serverClientId). Defaults to rejecting that audience.
+  GOOGLE_ACCEPT_ANDROID_AUDIENCE: z.enum(['true', 'false']).default('false'),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CLIENT_URL: z.string().default('http://localhost:8080'),
@@ -56,6 +73,9 @@ export const envSchema = z.object({
   if (config.EMAIL_PROVIDER === 'smtp' && !config.SMTP_HOST) context.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'EMAIL_PROVIDER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASSWORD' });
   if (config.REDIS_URL && !/^rediss?:\/\//.test(config.REDIS_URL)) context.addIssue({ code: 'custom', path: ['REDIS_URL'], message: 'REDIS_URL must use the redis:// or rediss:// scheme (reserved; no Redis adapter is wired yet)' });
   if (config.PAYMENT_PROVIDER && config.PAYMENT_PROVIDER !== 'stripe') context.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'Only the implemented stripe adapter is supported' });
+  if (config.GOOGLE_CLIENT_SECRET && !config.GOOGLE_WEB_CLIENT_ID && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_CLIENT_SECRET'], message: 'GOOGLE_CLIENT_SECRET requires GOOGLE_WEB_CLIENT_ID (or GOOGLE_CLIENT_ID)' });
+  if (config.GOOGLE_ACCEPT_ANDROID_AUDIENCE === 'true' && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_ACCEPT_ANDROID_AUDIENCE'], message: 'GOOGLE_ACCEPT_ANDROID_AUDIENCE=true requires GOOGLE_CLIENT_ID' });
+  if (config.JWT_SECRET === config.JWT_REFRESH_SECRET) context.addIssue({ code: 'custom', path: ['JWT_REFRESH_SECRET'], message: 'JWT_SECRET and JWT_REFRESH_SECRET must be different keys' });
   if (config.NODE_ENV === 'production' && !config.MONGODB_URI.startsWith('mongodb+srv://')) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: 'Production requires Atlas mongodb+srv TLS URI' });
 });
 
@@ -81,9 +101,53 @@ function loadEnv(): Env {
 
 export const env: Env = loadEnv();
 
-export const hasGoogleOAuth = Boolean(env.GOOGLE_CLIENT_ID);
+/**
+ * Google OAuth identifiers, resolved on demand so configuration changes and
+ * tests are reflected without reloading the module.
+ *
+ * `audiences` is the accepted `aud` claim set for ID-token verification. The Web
+ * application client ID is the audience produced by google_sign_in when
+ * `serverClientId` is configured, so it is the primary (and normally only)
+ * accepted value. `GOOGLE_CLIENT_ID` (the Android OAuth client, bound to package
+ * `com.musikuplus.app` + SHA-1) identifies the app to Google Play services and is
+ * accepted as an audience only when explicitly opted in: a token minted for a
+ * different client must be rejected.
+ */
+export function googleOAuthConfig(): {
+  audiences: string[];
+  webClientId: string;
+  androidClientId: string;
+  configured: boolean;
+} {
+  const webClientId = env.GOOGLE_WEB_CLIENT_ID || env.GOOGLE_CLIENT_ID;
+  const androidClientId = env.GOOGLE_CLIENT_ID;
+  const audiences = [
+    ...(webClientId ? [webClientId] : []),
+    ...(env.GOOGLE_ACCEPT_ANDROID_AUDIENCE === 'true' && androidClientId && androidClientId !== webClientId
+      ? [androidClientId]
+      : []),
+  ];
+  return { audiences, webClientId, androidClientId, configured: audiences.length > 0 };
+}
+
+export const hasGoogleOAuth = googleOAuthConfig().configured;
+
 export const hasLicensedMusic = Boolean(env.LICENSED_MUSIC_API_KEY && env.LICENSED_MUSIC_BASE_URL);
 export const hasLicensedAnime = Boolean(env.LICENSED_ANIME_API_KEY && env.LICENSED_ANIME_BASE_URL);
 export const hasPayments = Boolean(env.PAYMENT_PROVIDER === 'stripe' && env.PAYMENT_SECRET_KEY && env.PAYMENT_WEBHOOK_SECRET);
 export const hasEmail = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
 export const hasStorage = Boolean(env.STORAGE_ENDPOINT && env.STORAGE_ACCESS_KEY && env.STORAGE_SECRET_KEY);
+
+/** Database used by the Atlas integration suite; never the production database. */
+export const testDatabaseName = env.MONGODB_TEST_DB_NAME || `${env.MONGODB_DB_NAME}_ci_test`;
+
+/** Redacts a Mongo connection string so it can never reach a log or CI summary. */
+export function redactMongoUri(uri: string): string {
+  if (!uri) return '(unset)';
+  try {
+    const withoutCredentials = uri.replace(/^(mongodb(?:\+srv)?:\/\/)([^@/]+)@/, '$1<redacted>@');
+    return withoutCredentials.replace(/:[^:@/]*@/, ':<redacted>@');
+  } catch {
+    return '(redacted)';
+  }
+}

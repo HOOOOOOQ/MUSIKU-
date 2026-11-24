@@ -7,7 +7,7 @@ import { validate } from '../middleware/validate';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { authService } from '../services/authService';
 import { ok, created, needsCredentials } from '../utils/apiResponse';
-import { hasGoogleOAuth } from '../config/env';
+import { googleOAuthConfig } from '../config/env';
 
 export const authRouter = Router();
 
@@ -45,7 +45,7 @@ const meta = (req: AuthedRequest) => ({
  */
 authRouter.get('/providers', (_req, res) => {
   ok(res, [
-    { id: 'google', label: 'Google', enabled: hasGoogleOAuth, exchangeEndpoint: '/auth/google' },
+    { id: 'google', label: 'Google', enabled: googleOAuthConfig().configured, exchangeEndpoint: '/auth/google' },
   ]);
 });
 
@@ -60,8 +60,8 @@ authRouter.post('/login', validate(loginSchema), asyncHandler(async (req, res) =
 }));
 
 authRouter.post('/google', validate(googleSchema), asyncHandler(async (req, res) => {
-  if (!hasGoogleOAuth) {
-    needsCredentials(res, 'Google Sign-In', ['GOOGLE_CLIENT_ID']);
+  if (!googleOAuthConfig().configured) {
+    needsCredentials(res, 'Google Sign-In', ['GOOGLE_WEB_CLIENT_ID']);
     return;
   }
   const result = await authService.loginWithGoogle(req.body.idToken, meta(req));
@@ -112,12 +112,12 @@ authRouter.get('/sessions', requireAuth, asyncHandler(async (req: AuthedRequest,
   ok(res, await UserSession.find({ user: req.userId, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }).select('_id deviceId userAgent createdAt expiresAt').sort({ createdAt: -1 }).limit(100).lean());
 }));
 authRouter.delete('/sessions/:id', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
-  const session = await UserSession.findOneAndUpdate({ _id: req.params.id, user: req.userId }, { $set: { revokedAt: new Date() } }, { new: true });
+  const session = await UserSession.findOneAndUpdate({ _id: req.params.id, user: req.userId }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } }, { new: true });
   if (!session) throw notFound('Session not found');
   ok(res, { revoked: true });
 }));
 authRouter.post('/revoke-all', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
-  await UserSession.updateMany({ user: req.userId }, { $set: { revokedAt: new Date() } });
+  await UserSession.updateMany({ user: req.userId }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } });
   ok(res, { revoked: true });
 }));
 

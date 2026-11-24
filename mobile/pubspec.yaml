@@ -8,7 +8,11 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^2.6.1
-  google_sign_in: ^6.3.0
+  # Pinned to the 6.x API actually used in core/google_auth.dart
+  # (GoogleSignIn(serverClientId: ...) + signIn()/authentication.idToken).
+  # 7.x/8.x replace signIn() with authenticate(), so a major bump is a code
+  # change, not a dependency refresh.
+  google_sign_in: '>=6.3.0 <7.0.0'
   go_router: ^14.8.1
   dio: ^5.8.0
   just_audio: ^0.9.46

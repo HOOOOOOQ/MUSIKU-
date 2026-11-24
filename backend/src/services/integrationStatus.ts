@@ -1,4 +1,5 @@
-import { env, hasGoogleOAuth, hasEmail, hasPayments, hasLicensedMusic, hasLicensedAnime } from '../config/env';
+import { env, hasEmail, hasPayments, hasLicensedMusic, hasLicensedAnime } from '../config/env';
+import { googleVerifierStatus } from '../services/googleIdentity';
 import { githubBuildStatus } from './githubBuildStatus';
 
 /**
@@ -10,7 +11,7 @@ import { githubBuildStatus } from './githubBuildStatus';
  */
 export async function integrationStatus() {
   return {
-    google: { configured: hasGoogleOAuth, verifier: 'google-auth-library', liveVerified: false },
+    google: { ...googleVerifierStatus(), liveVerified: false },
     email: { configured: hasEmail, adapter: 'smtp', liveVerified: false },
     payments: { configured: hasPayments, adapter: 'stripe', webhookSignatureVerification: true, liveVerified: false },
     musicStreaming: { credentialsPresent: hasLicensedMusic, adapterReady: false },

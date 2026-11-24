@@ -14,3 +14,6 @@ key.properties
 local.properties
 android/.gradle/
 *.log
+
+# Atlas pre-flight probe result (generated in CI; contains no secrets)
+backend/tests/atlas/preflight.json

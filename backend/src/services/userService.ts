@@ -63,7 +63,7 @@ export const userService = {
   },
 
   async removeDevice(userId: string, deviceId: string) {
-    await UserSession.updateMany({ user: userId, deviceId }, { $set: { revokedAt: new Date() } });
+    await UserSession.updateMany({ user: userId, deviceId }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } });
     const res = await UserDevice.deleteOne({ user: userId, deviceId });
     if (res.deletedCount === 0) throw notFound('Device not found');
   },

@@ -2,6 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'api.dart';
 
+/// Web application OAuth client ID. It is the `serverClientId` for
+/// google_sign_in, which makes Google issue an ID token whose audience is this
+/// web client — exactly the audience the backend verifies with
+/// google-auth-library. This is a public identifier, not a secret; the OAuth
+/// client **secret** never belongs in a Flutter build.
+///
+/// The Android OAuth client ID (`GOOGLE_CLIENT_ID` in the backend environment)
+/// is registered in Google Cloud Console against package `com.musikuplus.app`
+/// plus the signing-certificate SHA-1. google_sign_in 6.x resolves it
+/// automatically from that registration, so it is not needed in Dart code and is
+/// deliberately not embedded here.
 const googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
 abstract class IdentityProvider {

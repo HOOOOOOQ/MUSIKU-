@@ -8,19 +8,43 @@ final resourceProvider = FutureProvider.autoDispose.family<dynamic, String>(
   (ref, path) => ref.watch(apiProvider).get(path),
 );
 
+/// Public, build-time configuration. These values are compiled into the APK and
+/// can be extracted by anyone who has the file, so only non-sensitive settings
+/// belong here. `MONGODB_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET` and any OAuth
+/// client secret are backend-only and are never passed to `--dart-define`.
+const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+/// Legacy name kept so existing build commands and CI variables keep working.
+const legacyApiUrl = String.fromEnvironment('API_URL');
+
+/// Deliberately non-functional placeholder: a build without configuration must
+/// fail to reach a backend instead of silently talking to a fake one.
+const fallbackApiBaseUrl = 'https://api.example.invalid/api';
+
+/// Resolves the backend origin from build-time configuration.
+///
+/// `API_BASE_URL` wins, `API_URL` is accepted for backwards compatibility, and a
+/// trailing slash is normalised so `'$baseUrl/auth/login'` is always correct.
+String resolveApiBaseUrl({
+  String primary = apiBaseUrl,
+  String legacy = legacyApiUrl,
+  String fallback = fallbackApiBaseUrl,
+}) {
+  final configured = primary.trim().isNotEmpty ? primary.trim() : legacy.trim();
+  final value = configured.isNotEmpty ? configured : fallback;
+  return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+}
+
 class Api {
   final storage = const FlutterSecureStorage();
   final Dio dio;
   Future<void>? _refreshing;
-  Api({Dio? client})
+  Api({Dio? client, String? baseUrl})
     : dio =
           client ??
           Dio(
             BaseOptions(
-              baseUrl: const String.fromEnvironment(
-                'API_URL',
-                defaultValue: 'https://api.example.invalid/api',
-              ),
+              baseUrl: baseUrl ?? resolveApiBaseUrl(),
               connectTimeout: const Duration(seconds: 20),
               receiveTimeout: const Duration(seconds: 30),
             ),

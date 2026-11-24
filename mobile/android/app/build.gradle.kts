@@ -50,12 +50,12 @@ android {
 
     buildTypes {
         release {
-            // Without owner-supplied signing secrets the release APK stays on the
-            // debug key so the build is reproducible but clearly not distributable.
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Release signing comes only from owner-supplied material. The debug
+            // keystore is deliberately NOT used as a fallback: an artifact signed
+            // with a debug key must never be mistaken for a distributable build.
+            // Without key.properties the output stays unsigned.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }

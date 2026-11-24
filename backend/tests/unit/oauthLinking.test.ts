@@ -1,5 +1,10 @@
 jest.mock('../../src/services/googleIdentity', () => ({ googleIdentity: { verify: jest.fn() } }));
-jest.mock('../../src/config/env', () => ({ env: {JWT_SECRET:'test-secret-over-sixteen',JWT_REFRESH_SECRET:'refresh-secret-over-sixteen',JWT_ACCESS_EXPIRES:'15m',JWT_REFRESH_EXPIRES:'30d'}, hasGoogleOAuth:true,hasEmail:false }));
+jest.mock('../../src/config/env', () => ({
+  env: {JWT_SECRET:'test-secret-over-sixteen',JWT_REFRESH_SECRET:'refresh-secret-over-sixteen',JWT_ACCESS_EXPIRES:'15m',JWT_REFRESH_EXPIRES:'30d',REFRESH_REUSE_GRACE_MS:30000},
+  hasGoogleOAuth: true,
+  hasEmail: false,
+  googleOAuthConfig: () => ({ audiences: ['web-client'], webClientId: 'web-client', androidClientId: 'android-client', configured: true }),
+}));
 jest.mock('../../src/models', () => {
   const { createFakeModel } = require('../helpers/fakeModel');
   return { User:createFakeModel(),UserProfile:createFakeModel(),UserSession:createFakeModel(),UserPreference:createFakeModel(),UserDevice:createFakeModel(),LoginHistory:createFakeModel(),PasswordReset:createFakeModel(),EmailVerification:createFakeModel(),NotificationPreference:createFakeModel(),OAuthReplay:createFakeModel() };
