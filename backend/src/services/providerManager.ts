@@ -1,4 +1,6 @@
+import { providerContext } from '../providers/context';
 import { ApiProvider, ProviderCache, ProviderHealth, ProviderLog } from '../models/Provider';
+import { safeErrorMessage } from '../utils/redact';
 import { decryptSecret } from '../utils/crypto';
 
 /**
@@ -30,6 +32,7 @@ export interface ProviderRecord {
   maxRetries: number;
   cacheTtlSec: number;
   requiresCredentials: boolean;
+  rateLimitPerMin?: number;
 }
 
 export interface ExecuteOptions {
@@ -67,6 +70,7 @@ export class ProviderManager {
 
   async setCached(cacheKey: string, providerId: string, payload: unknown, ttlSec: number): Promise<void> {
     const expiresAt = new Date(Date.now() + ttlSec * 1000);
+    if (memoryCache.size >= 1000) memoryCache.delete(memoryCache.keys().next().value!);
     memoryCache.set(cacheKey, { value: payload, expiresAt: expiresAt.getTime() });
     await this.cacheModel.findOneAndUpdate(
       { cacheKey },
@@ -101,7 +105,7 @@ export class ProviderManager {
       const started = Date.now();
       try {
         const apiKey = await this.resolveApiKey(provider);
-        const result = await fn(provider, apiKey);
+        const result = await providerContext.run({ timeoutMs: provider.timeoutMs, retries: provider.maxRetries }, () => fn(provider, apiKey));
         const latency = Date.now() - started;
         await this.recordSuccess(provider, latency);
         if (!isEmpty(result)) {
@@ -156,7 +160,7 @@ export class ProviderManager {
       { _id: provider._id },
       {
         $inc: { errorCount: 1 },
-        $set: { healthStatus: 'degraded', lastCheckedAt: new Date(), lastError: message.slice(0, 500), avgLatencyMs: latencyMs },
+        $set: { healthStatus: 'degraded', lastCheckedAt: new Date(), lastError: safeErrorMessage(message), avgLatencyMs: latencyMs },
       },
     );
     await this.logModel.create({
@@ -165,27 +169,41 @@ export class ProviderManager {
       operation: 'execute',
       success: false,
       latencyMs,
-      errorMessage: message.slice(0, 500),
+      errorMessage: safeErrorMessage(message),
     });
   }
 
-  /** Health check: verify each enabled provider's base URL responds. */
+  /**
+   * Health check: verify each enabled provider responds.
+   *
+   * Query-routed providers (Animeku/Animasu) cannot be probed with a bare GET on
+   * the base URL — that returns an error page even when the API is healthy — so
+   * they are probed through their own adapter, which exercises a real catalog
+   * call and reports the payload shape.
+   */
   async healthCheckAll(): Promise<{ providerId: string; status: string; latencyMs: number }[]> {
     const providers = await this.providerModel.find({ enabled: true }).lean();
     const results: { providerId: string; status: string; latencyMs: number }[] = [];
     for (const p of providers as unknown as ProviderRecord[]) {
       const started = Date.now();
       let status = 'healthy';
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), p.timeoutMs || 8000);
-        const res = await fetch(p.baseUrl, { method: 'GET', signal: controller.signal });
-        clearTimeout(timer);
-        if (!res.ok) status = 'degraded';
-      } catch {
-        status = 'down';
+      let latencyMs = 0;
+      if (p.type === 'animeku' || p.providerId === 'animasu') {
+        const probe = await this.probeAnimeku();
+        status = !probe.reachable ? 'down' : probe.items > 0 ? 'healthy' : 'degraded';
+        latencyMs = probe.latencyMs;
+      } else {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), p.timeoutMs || 8000);
+          const res = await fetch(p.baseUrl, { method: 'GET', signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) status = 'degraded';
+        } catch {
+          status = 'down';
+        }
+        latencyMs = Date.now() - started;
       }
-      const latencyMs = Date.now() - started;
       await this.providerModel.updateOne(
         { _id: p._id },
         { $set: { healthStatus: status, lastCheckedAt: new Date(), avgLatencyMs: latencyMs } },
@@ -193,6 +211,17 @@ export class ProviderManager {
       results.push({ providerId: p.providerId, status, latencyMs });
     }
     return results;
+  }
+
+  /** Lazy import keeps the module graph free of cycles. */
+  private async probeAnimeku(): Promise<{ reachable: boolean; latencyMs: number; items: number }> {
+    try {
+      const { animasuProvider } = await import('../providers/anime/animasu');
+      const probe = await animasuProvider.probe();
+      return { reachable: probe.reachable, latencyMs: probe.latencyMs, items: probe.items };
+    } catch {
+      return { reachable: false, latencyMs: 0, items: 0 };
+    }
   }
 }
 

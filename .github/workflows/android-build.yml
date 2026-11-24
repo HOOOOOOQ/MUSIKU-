@@ -1,0 +1,251 @@
+name: Android APK
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  # Never cancel: the Dart format step can push a follow-up commit, and the run
+  # that produced it must still finish (build + scan + upload) so the check on
+  # the previous sha stays truthful.
+  cancel-in-progress: false
+
+# Secret handling rules enforced by this workflow:
+#   * secrets are injected only into the job/steps that need them (per-step `env:`);
+#   * no `echo` of a secret, and no step prints an environment value;
+#   * MONGODB_URI / JWT_SECRET / JWT_REFRESH_SECRET are backend-only and are
+#     never passed to `--dart-define`, so they cannot reach the APK — the
+#     `Prove no backend secret is embedded in the APK` step verifies that;
+#   * keystores and signing properties are temporary files, never artifacts, and
+#     are deleted on success and failure.
+# Backend, Atlas integration and admin verification live in verify.yml.
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # `contents: write` is used by exactly one step: the canonical Dart format
+    # commit (see "Format Dart sources"). Nothing else in this job pushes.
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: mobile
+        shell: bash
+    env:
+      # Public build-time configuration only. The web client ID is a public
+      # identifier (it ships inside the APK); the API origin is a URL.
+      API_BASE_URL: ${{ vars.API_BASE_URL || vars.API_URL }}
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so the format fix-up commit can rebase and push.
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve packages
+        run: |
+          mkdir -p ci-logs
+          set -o pipefail
+          flutter --version | tee ci-logs/toolchain.log
+          flutter pub get 2>&1 | tee ci-logs/pub-get.log
+      # Canonical formatting is enforced, and the formatter also heals the
+      # branch: `dart format` is deterministic, so committing its output cannot
+      # change behaviour, and this same run goes on to analyze, test and build
+      # the formatted tree it just pushed.
+      #
+      # The fix-up commit carries `[skip ci]` on purpose. Without it a bot
+      # authored head commit creates fresh workflow runs that GitHub gates
+      # behind a human "Approve and run" click (observed as `action_required`
+      # on runs 45393449935/45393450053 for style commit `9a2c9f9`), so the
+      # branch ends up with checks nobody can start; `[skip ci]` keeps the
+      # evidence on the run that actually did the work.
+      #
+      # Fork pull requests cannot be pushed to with the job token, so there the
+      # step fails and lists the offending files instead of healing.
+      - name: Format Dart sources
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -o pipefail
+          can_push=true
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if [[ -n "$PR_HEAD_REPO" && "$PR_HEAD_REPO" != "$REPO" ]]; then
+              can_push=false
+            else
+              # checkout leaves a detached merge ref for pull_request events;
+              # the fix-up commit has to land on the real head branch.
+              git fetch --no-tags origin "+refs/heads/$HEAD_BRANCH:refs/remotes/origin/$HEAD_BRANCH"
+              git checkout -B "$HEAD_BRANCH" "origin/$HEAD_BRANCH"
+            fi
+          fi
+          dart format lib test 2>&1 | tee ci-logs/format.log
+          if [[ -z "$(git status --porcelain lib test)" ]]; then
+            echo "::notice title=Dart format::PASS - lib and test are canonically formatted"
+            dart format --output=none --set-exit-if-changed lib test
+            exit 0
+          fi
+          changed=$(git status --porcelain lib test | awk '{print $2}' | tr '\n' ' ')
+          if [[ "$can_push" != "true" ]]; then
+            echo "::error title=Dart format::sources are not dart-format clean and a fork pull request cannot be auto-formatted: $changed"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib test
+          git commit -m "style(mobile): apply dart format ($changed) [skip ci]"
+          git push origin "HEAD:$HEAD_BRANCH"
+          echo "::notice title=Dart format::reformatted and pushed a style commit to $HEAD_BRANCH ([skip ci], so this run is the evidence): $changed"
+          dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: |
+          set +e
+          flutter analyze 2>&1 | tee ci-logs/analyze.log
+          status=${PIPESTATUS[0]}
+          while IFS= read -r line; do
+            line="${line//'%'/'%25'}"
+            echo "::notice title=Flutter analyzer::$line"
+          done < ci-logs/analyze.log
+          exit "$status"
+      - name: Test
+        run: |
+          set +e
+          flutter test 2>&1 | tee ci-logs/tests.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            python3 ../scripts/ci_notice.py ci-logs/tests.log 'Flutter tests'
+            exit "$status"
+          fi
+          # Flutter's reporter uses carriage returns and ANSI colours, so the
+          # summary is parsed by a script instead of a fragile shell grep.
+          python3 ../scripts/report_flutter_tests.py ci-logs/tests.log test
+      - name: Build debug APK
+        run: |
+          set +e
+          flutter build apk --debug \
+            --dart-define="API_BASE_URL=${API_BASE_URL:-https://api.example.invalid/api}" \
+            --dart-define="GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID" 2>&1 | tee ci-logs/debug-build.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            python3 ../scripts/ci_notice.py ci-logs/debug-build.log 'Android debug build' 'FAILURE'
+            exit "$status"
+          fi
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+      - name: Prove no backend secret is embedded in the APK
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          PAYMENT_SECRET_KEY: ${{ secrets.PAYMENT_SECRET_KEY }}
+          PAYMENT_WEBHOOK_SECRET: ${{ secrets.PAYMENT_WEBHOOK_SECRET }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          GITHUB_BUILD_TOKEN: ${{ secrets.GITHUB_BUILD_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 ../scripts/scan_apk_secrets.py build/app/outputs/flutter-apk/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Record APK metadata
+        run: |
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          size=$(stat -c%s "$apk")
+          digest=$(sha256sum "$apk" | cut -d' ' -f1)
+          api_state=$([[ -n "$API_BASE_URL" ]] && echo "API_BASE_URL baked in" || echo "API origin not configured (non-functional example.invalid default)")
+          google_state=$([[ -n "$GOOGLE_WEB_CLIENT_ID" ]] && echo "GOOGLE_WEB_CLIENT_ID baked in" || echo "web client ID not baked in (Google button hidden)")
+          {
+            echo "### Debug APK"
+            echo ""
+            echo "- Path: `mobile/$apk`"
+            echo "- Size: $size bytes"
+            echo "- SHA-256: $digest"
+            echo "- $api_state"
+            echo "- $google_state"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Annotation, so the result stays readable through the check-run API.
+          echo "::notice title=Debug APK::musiku-plus-debug-apk ${size} bytes sha256=${digest} | ${api_state} | ${google_state}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: musiku-plus-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+      - name: Check signing availability
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE" && -n "$STORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" && "${{ github.event_name }}" != "pull_request" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            {
+              echo "### Release signing"
+              echo ""
+              echo "Not configured (or not usable on a pull request): debug artifact only."
+              echo "No signing key was generated and the debug keystore is never used to sign a release build."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/musiku-release.jks" android/key.properties' EXIT
+          python3 ../scripts/configure_signing.py
+          set +e
+          flutter build apk --release \
+            --dart-define="API_BASE_URL=${API_BASE_URL:-https://api.example.invalid/api}" \
+            --dart-define="GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID" 2>&1 | tee ci-logs/release-build.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            python3 ../scripts/ci_notice.py ci-logs/release-build.log 'Android release build' 'FAILURE'
+            exit "$status"
+          fi
+          test -s build/app/outputs/flutter-apk/app-release.apk
+      - name: Scan the release APK for embedded secrets
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          PAYMENT_SECRET_KEY: ${{ secrets.PAYMENT_SECRET_KEY }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python3 ../scripts/scan_apk_secrets.py build/app/outputs/flutter-apk/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          name: musiku-plus-release-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/musiku-release.jks" android/key.properties
+      - name: Upload diagnostic logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: musiku-plus-android-build-logs
+          path: mobile/ci-logs/*.log
+          retention-days: 7

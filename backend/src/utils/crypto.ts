@@ -37,10 +37,11 @@ export interface AccessTokenPayload {
   sub: string;
   role: string;
   type: 'access';
+  sid?: string;
 }
 
-export function signAccessToken(userId: string, role: string): string {
-  return jwt.sign({ sub: userId, role, type: 'access' } as AccessTokenPayload, env.JWT_SECRET, {
+export function signAccessToken(userId: string, role: string, sid?: string): string {
+  return jwt.sign({ sub: userId, role, type: 'access', sid, jti: crypto.randomUUID() } as AccessTokenPayload, env.JWT_SECRET, {
     expiresIn: env.JWT_ACCESS_EXPIRES as jwt.SignOptions['expiresIn'],
   });
 }

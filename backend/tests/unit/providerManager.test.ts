@@ -1,6 +1,11 @@
 import { ProviderManager } from '../../src/services/providerManager';
 import { createFakeModel } from '../helpers/fakeModel';
 
+/* The Animeku health probe is mocked: `healthCheckAll` must reach the adapter
+ * (not the network) for query-routed providers. */
+const mockProbe = jest.fn(async () => ({ reachable: true, latencyMs: 12, items: 0, scheduleShape: 'empty', reason: 'probe ok' }));
+jest.mock('../../src/providers/anime/animasu', () => ({ animasuProvider: { probe: mockProbe } }));
+
 function setup() {
   const providerModel = createFakeModel();
   const cacheModel = createFakeModel();
@@ -109,5 +114,69 @@ describe('ProviderManager', () => {
     const logs = logModel._docs;
     expect(logs.some((l) => l.success === false)).toBe(true);
     expect(logs.some((l) => l.success === true)).toBe(true);
+  });
+  it('redacts media URLs from persisted provider errors', async () => {
+    const { manager, providerModel, logModel } = setup();
+    await providerModel.create(provider('primary', 10));
+
+    await expect(
+      manager.execute('music_metadata', { operation: 'test' }, async () => {
+        throw new Error('segment fetch failed for https://cdn.example/seg.m3u8?token=super-secret');
+      }),
+    ).rejects.toThrow();
+
+    const failure = logModel._docs.find((log) => log.success === false);
+    expect(failure?.errorMessage).toContain('<url-redacted>');
+    expect(failure?.errorMessage).not.toContain('super-secret');
+    expect(String(providerModel._docs[0].lastError)).not.toContain('super-secret');
+  });
+});
+
+describe('ProviderManager health checks', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    (global as unknown as { fetch: unknown }).fetch = realFetch;
+    mockProbe.mockClear();
+  });
+
+  it('probes a query-routed Animeku provider through its adapter, never the bare base URL', async () => {
+    const { manager, providerModel } = setup();
+    await providerModel.create({ ...provider('animasu', 10), type: 'animeku', baseUrl: 'https://api.nexadev.my.id/animasu' });
+    const fetchSpy = jest.fn();
+    (global as unknown as { fetch: unknown }).fetch = fetchSpy;
+
+    const results = await manager.healthCheckAll();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockProbe).toHaveBeenCalledTimes(1);
+    // reachable but empty catalog => degraded, not "healthy"
+    expect(results).toEqual([{ providerId: 'animasu', status: 'degraded', latencyMs: 12 }]);
+    expect(providerModel._docs[0].healthStatus).toBe('degraded');
+  });
+
+  it('reports a healthy Animeku provider when the probe returns catalog items', async () => {
+    mockProbe.mockResolvedValueOnce({ reachable: true, latencyMs: 30, items: 12, scheduleShape: 'object', reason: 'ok' });
+    const { manager, providerModel } = setup();
+    await providerModel.create({ ...provider('animasu', 10), type: 'animeku' });
+    const results = await manager.healthCheckAll();
+    expect(results[0].status).toBe('healthy');
+  });
+
+  it('reports a down Animeku provider when the probe cannot reach it', async () => {
+    mockProbe.mockResolvedValueOnce({ reachable: false, latencyMs: 5000, items: 0, scheduleShape: 'unknown', reason: 'timeout' });
+    const { manager, providerModel } = setup();
+    await providerModel.create({ ...provider('animasu', 10), type: 'animeku' });
+    const results = await manager.healthCheckAll();
+    expect(results[0].status).toBe('down');
+  });
+
+  it('still checks other providers with a bounded GET on their base URL', async () => {
+    const { manager, providerModel } = setup();
+    await providerModel.create(provider('deezer', 10));
+    const fetchSpy = jest.fn(async () => ({ ok: true }));
+    (global as unknown as { fetch: unknown }).fetch = fetchSpy;
+
+    const results = await manager.healthCheckAll();
+    expect(results[0]).toMatchObject({ providerId: 'deezer', status: 'healthy' });
+    expect(fetchSpy).toHaveBeenCalledWith('https://example.com', expect.objectContaining({ method: 'GET' }));
   });
 });

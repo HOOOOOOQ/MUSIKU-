@@ -19,7 +19,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true, minlength: 3, maxlength: 30, index: true },
     passwordHash: { type: String, default: undefined },
-    googleId: { type: String, default: undefined, index: true },
+    googleId: { type: String, default: undefined, unique: true, sparse: true },
     role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
     status: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active', index: true },
     emailVerified: { type: Boolean, default: false },
@@ -54,16 +54,25 @@ export const UserProfile = mongoose.model('UserProfile', profileSchema, 'user_pr
 const sessionSchema = new Schema(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    // Only a SHA-256 hash of the refresh token is stored; the plaintext token is
+    // never persisted.
     refreshTokenHash: { type: String, required: true, unique: true, index: true },
+    // Rotation family: the first session of a login chain. Rotated children keep
+    // the same value so a replayed token can revoke exactly that chain.
+    family: { type: String, default: '', index: true },
     deviceId: { type: String, default: '' },
     userAgent: { type: String, default: '' },
     ip: { type: String, default: '' },
     expiresAt: { type: Date, required: true },
     revokedAt: { type: Date, default: undefined },
+    // Set when the token was consumed by rotation (drives reuse detection).
+    rotatedAt: { type: Date, default: undefined },
+    revokedReason: { type: String, enum: ['', 'logout', 'rotated', 'reuse_detected', 'password_changed', 'admin', 'account_deleted'], default: '' },
   },
   { timestamps: true },
 );
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL cleanup
+sessionSchema.index({ user: 1, family: 1 });
 export const UserSession = mongoose.model('UserSession', sessionSchema, 'user_sessions');
 
 /* ── user_devices ──────────────────────────────────────────────────────── */
@@ -149,3 +158,7 @@ emailVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const EmailVerification = mongoose.model('EmailVerification', emailVerificationSchema, 'email_verifications');
 
 export type ObjectId = Types.ObjectId;
+
+const oauthReplaySchema = new Schema({ tokenHash: { type: String, required: true, unique: true }, expiresAt: { type: Date, required: true } }, { timestamps: true });
+oauthReplaySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const OAuthReplay = mongoose.model('OAuthReplay', oauthReplaySchema, 'oauth_replays');

@@ -19,8 +19,15 @@ The Atlas probe writes a uniquely tagged document to `_integration_probes`, read
 - Deploy backend as a long-running Node 22 service with network access to Atlas and approved provider endpoints. Health endpoint `/health` is process liveness, not proof of database availability. Admin dashboard's database health invokes a DB ping.
 - Deploy `admin/` with `BACKEND_URL` pointing to the backend origin; `/api/:path*` proxies requests server-side. `NEXT_PUBLIC_API_URL` should normally be empty. Only deliberately public configuration belongs in `NEXT_PUBLIC_*` variables.
 - Deploy with HTTPS and a restrictive proxy policy. Never cache authenticated/private API responses in public CDNs.
-- Build mobile with the reachable HTTPS API origin ending in `/api` through `--dart-define=API_URL=...`.
-- `REDIS_URL` is reserved configuration; current provider cache uses MongoDB/memory, not an active Redis adapter.
+- Build mobile with the reachable HTTPS API origin ending in `/api` through `--dart-define=API_URL=...`, or set the `API_URL` GitHub repository variable so CI artifacts embed it. Artifacts built without that variable use the nonfunctional `https://api.example.invalid/api` default and cannot reach a backend. `GOOGLE_WEB_CLIENT_ID` (public web client ID) must also be provided at build time for the Google button to appear.
+- `REDIS_URL` is reserved configuration; current provider cache uses bounded in-process memory, not an active Redis adapter, so provider rate budgets are per-instance only. Run multiple backend instances behind a load balancer only after adding distributed enforcement.
+- Optional backend-only `GITHUB_BUILD_TOKEN` (fine-grained, Actions read, this repository) lets the admin integration page show sanitized Android workflow status for `main`; it is never returned to the browser and public repositories can omit it.
+
+## Animeku
+
+Animeku metadata needs no credentials: `ANIMASU_BASE_URL` (must be an `https://` origin without embedded credentials — startup rejects anything else), `ANIMASU_ENABLED`, `ANIMASU_TIMEOUT_MS`, `ANIMASU_CACHE_TTL_SEC`, `ANIMASU_RATE_LIMIT_PER_MIN`. Seed creates the `animasu` provider record from these values; the admin **Animeku** page then manages enable/disable, priority, timeouts, cache TTL and rate limit.
+
+Video playback is a rights decision, not a configuration convenience. Keep `ANIMASU_STREAMING_AUTHORIZED=false` unless you hold or are granted redistribution rights for the media. To turn it on you must also set `ANIMASU_ALLOWED_STREAM_HOSTS` to the exact https hosts allowed to serve media (wildcards as `*.domain`); startup refuses the switch with an empty allowlist, because an allowlist-free deployment would resolve media from any host. Egress rules should permit only the configured provider origin and the allow-listed media hosts. Media URLs are temporary: never persisted (episode documents keep `streamUrl: ''`), never cached, never logged, never rendered by the admin dashboard, and only served to an authenticated MUSIKU+ session. With authorization off, `/anime/status` reports `playback: "not_authorized"` and media requests answer `403 STREAM_NOT_AUTHORIZED` — that is the expected, honest state, not a failure. See [ANIMEKU.md](ANIMEKU.md).
 
 ## Licensed media
 
@@ -37,4 +44,6 @@ keyAlias=
 keyPassword=
 ```
 
-Do not fill secrets in documentation or commit a real signing properties file. Debug APKs are for testing only. The current CI creates only a debug APK; release publication is not configured.
+Do not fill secrets in documentation or commit a real signing properties file. Debug APKs are for testing only.
+
+In CI, add the four repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) via GitHub Settings; `scripts/configure_signing.py` decodes the keystore into `$RUNNER_TEMP` with `0600` permissions, writes an escaped `mobile/android/key.properties`, and both files are deleted on success and failure. Release builds run only on non-PR events with all four secrets present and upload exactly `musiku-plus-release-apk`; the keystore is never an artifact and passwords are never printed. **Today no signing secrets are configured, so CI produces only the debug artifact** (`musiku-plus-debug-apk`, run 45356394418, 84,326,973 bytes) and release publication is not configured. Without `storeFile`, `build.gradle.kts` now leaves the release variant **unsigned** — the debug keystore is deliberately no longer used as a fallback, so a debug-keyed artifact can never be mistaken for a distributable build. Run `apksigner verify --print-certs` (or `jarsigner -verify`) before publishing anything.

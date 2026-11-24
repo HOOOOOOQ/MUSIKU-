@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { catalogService } from '../services/catalogService';
+import { animeService } from '../services/animeService';
 import { SearchHistory } from '../models';
 import { ok } from '../utils/apiResponse';
 
@@ -37,7 +38,15 @@ searchRouter.get('/', validate(universalSchema, 'query'), asyncHandler(async (re
     tasks.push(catalogService.searchAlbums(q, Math.min(limit, 8)).then((r) => { results.albums = r; }).catch(() => { results.albums = []; }));
   }
   if (category === 'all' || category === 'anime') {
-    tasks.push(catalogService.searchAnime(q, 1, limit).then((r) => { results.anime = r.items; }).catch(() => { results.anime = []; }));
+    /* Animeku first (it records the query and returns provider links), with the
+     * AniList/Jikan path as a fallback so search never blanks out. */
+    tasks.push(
+      animeService
+        .search(q, { limit, userId: req.userId })
+        .then((r) => { results.anime = r.items; })
+        .catch(() => catalogService.searchAnime(q, 1, limit).then((r) => { results.anime = r.items; }))
+        .catch(() => { results.anime = []; }),
+    );
   }
 
   await Promise.all(tasks);

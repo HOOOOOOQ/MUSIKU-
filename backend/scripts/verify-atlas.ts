@@ -1,10 +1,15 @@
-import { connectDatabase, disconnectDatabase, initIndexes, databaseHealth } from '../src/config/database';
+import { connectDatabase, disconnectDatabase, initIndexes, databaseHealth, supportsTransactions } from '../src/config/database';
+import { env } from '../src/config/env';
 import mongoose from 'mongoose';
 import { randomUUID } from 'crypto';
 async function verify() {
-  await connectDatabase();
+  // With MONGODB_TEST_DB_NAME set (as in CI) the probe runs against an isolated
+  // database instead of the configured one.
+  await connectDatabase({ dbName: env.MONGODB_TEST_DB_NAME || env.MONGODB_DB_NAME, attempts: 2 });
   try {
-    await initIndexes();
+    const indexes = await initIndexes();
+    if (indexes.failures.length > 0) console.warn('Index failures:', indexes.failures);
+    console.log('Transactions supported:', await supportsTransactions());
     if ((await databaseHealth()).status !== 'ok') throw new Error('Atlas ping failed');
     const db = mongoose.connection.db!;
     const collection = db.collection('_integration_probes');

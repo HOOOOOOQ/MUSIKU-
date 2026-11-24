@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { subscriptionService } from '../services/subscriptionService';
-import { ok, needsCredentials, fail } from '../utils/apiResponse';
+import { ok, needsCredentials } from '../utils/apiResponse';
 
 export const premiumRouter = Router();
 premiumRouter.use(requireAuth);
@@ -38,7 +38,6 @@ premiumRouter.get('/payments', asyncHandler(async (req: AuthedRequest, res) => {
   ok(res, await subscriptionService.paymentHistory(req.userId!));
 }));
 
-/** Fail closed until a concrete provider signature verifier is installed. */
-premiumRouter.post('/webhook', asyncHandler(async (_req, res) => {
-  fail(res, 501, 'INTEGRATION_NOT_CONFIGURED', 'Signed payment webhook adapter is not configured');
-}));
+// The signed payment webhook is registered in app.ts before the JSON body
+// parser (raw body is required for signature verification), so this router
+// intentionally does not declare a competing /webhook route.

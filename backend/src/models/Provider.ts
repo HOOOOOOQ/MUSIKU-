@@ -10,6 +10,8 @@ export const PROVIDER_TYPES = [
   'music_lyrics',
   'music_audio',
   'anime_metadata',
+  // Consumer-facing "Animeku" catalog provider (internal name: Animasu).
+  'animeku',
   'anime_artwork',
   'anime_schedule',
   'anime_video',

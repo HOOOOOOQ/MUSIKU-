@@ -1,8 +1,11 @@
+import { auditService } from './auditService';
+import { googleIdentity } from './googleIdentity';
+import { deliverActionEmail } from './emailService';
 import crypto from 'crypto';
-import { User, UserProfile, UserSession, UserPreference, UserDevice, LoginHistory, PasswordReset, EmailVerification, NotificationPreference } from '../models';
+import { User, UserProfile, UserSession, UserPreference, UserDevice, LoginHistory, PasswordReset, EmailVerification, NotificationPreference, OAuthReplay } from '../models';
 import { hashPassword, verifyPassword, sha256, randomToken, signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/crypto';
-import { env, hasGoogleOAuth } from '../config/env';
-import { badRequest, unauthorized, conflict, notFound } from '../utils/apiResponse';
+import { env, googleOAuthConfig, hasEmail } from '../config/env';
+import { ApiError, badRequest, unauthorized, conflict, notFound } from '../utils/apiResponse';
 
 export interface AuthTokens {
   accessToken: string;
@@ -16,18 +19,36 @@ export interface RegisterInput {
   displayName?: string;
 }
 
-async function issueTokens(userId: string, role: string, deviceId = '', ip = '', userAgent = ''): Promise<AuthTokens> {
-  const accessToken = signAccessToken(userId, role);
+async function issueTokens(
+  userId: string,
+  role: string,
+  deviceId = '',
+  ip = '',
+  userAgent = '',
+  family = '',
+): Promise<AuthTokens> {
   const refreshToken = signRefreshToken(userId);
-  await UserSession.create({
+  // A new login starts a rotation family; a rotation continues the existing one.
+  const familyId = family || crypto.randomUUID();
+  const session = await UserSession.create({
     user: userId,
     refreshTokenHash: sha256(refreshToken),
+    family: familyId,
     deviceId,
     ip,
     userAgent,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
-  return { accessToken, refreshToken };
+  return { accessToken: signAccessToken(userId, role, String(session._id)), refreshToken };
+}
+
+/** Revoke every live session of one rotation family (theft containment). */
+async function revokeFamily(user: unknown, family: string, reason: string): Promise<number> {
+  const result = await UserSession.updateMany(
+    { user, family, revokedAt: { $exists: false } },
+    { $set: { revokedAt: new Date(), revokedReason: reason } },
+  );
+  return (result as { modifiedCount?: number }).modifiedCount ?? 0;
 }
 
 async function ensureProfile(userId: string, displayName = ''): Promise<void> {
@@ -38,6 +59,7 @@ async function ensureProfile(userId: string, displayName = ''): Promise<void> {
 
 export const authService = {
   async register(input: RegisterInput): Promise<{ user: unknown; tokens: AuthTokens }> {
+    if (env.NODE_ENV === 'production' && !hasEmail) throw new ApiError(503, 'EMAIL_NOT_CONFIGURED', 'Email delivery is not configured');
     const email = input.email.toLowerCase().trim();
     const username = input.username.toLowerCase().trim();
     const existing = await User.findOne({ $or: [{ email }, { username }] }).lean();
@@ -60,7 +82,9 @@ export const authService = {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
+    await deliverActionEmail(email, 'verify-email', verifyToken);
     const tokens = await issueTokens(String(user._id), user.role);
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
@@ -90,32 +114,32 @@ export const authService = {
     }
 
     const tokens = await issueTokens(String(user._id), user.role, meta.deviceId ?? '', meta.ip ?? '', meta.userAgent ?? '');
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
   /** Google Sign-In: verifies the ID token against Google's JWKS via fetch. */
   async loginWithGoogle(idToken: string, meta: { ip?: string; userAgent?: string; deviceId?: string } = {}): Promise<{ user: unknown; tokens: AuthTokens }> {
-    if (!hasGoogleOAuth) {
+    if (!googleOAuthConfig().configured) {
       throw new Error('GOOGLE_NOT_CONFIGURED');
     }
-    const res = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
-    );
-    if (!res.ok) throw unauthorized('Invalid Google ID token');
-    const info = (await res.json()) as { sub: string; email: string; aud: string; name?: string; picture?: string };
-    if (info.aud !== env.GOOGLE_CLIENT_ID) throw unauthorized('Google token audience mismatch');
+    const info = await googleIdentity.verify(idToken);
+    try { await OAuthReplay.create({ tokenHash: sha256(idToken), expiresAt: new Date(info.exp * 1000) }); }
+    catch (error) { if ((error as {code?: number}).code === 11000) throw unauthorized('Google token already exchanged'); throw error; }
 
     let user = await User.findOne({ googleId: info.sub });
     if (!user) {
-      user = await User.findOne({ email: info.email.toLowerCase() });
+      user = await User.findOne({ email: info.email!.toLowerCase() });
       if (user) {
+        if (user.status !== 'active') throw unauthorized('Account unavailable');
+        if (!user.emailVerified || (user.googleId && user.googleId !== info.sub)) throw conflict('Verify the existing account email before linking Google');
         user.googleId = info.sub;
         await user.save();
       } else {
-        const username = info.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || `user${Date.now()}`;
+        const username = info.email!.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || `user${Date.now()}`;
         user = await User.create({
-          email: info.email.toLowerCase(),
-          username: `${username}${Math.floor(Math.random() * 1000)}`,
+          email: info.email!.toLowerCase(),
+          username: `${username.slice(0, 17)}_${crypto.randomBytes(6).toString('hex')}`,
           googleId: info.sub,
           emailVerified: true,
           role: 'user',
@@ -125,10 +149,28 @@ export const authService = {
         await UserProfile.updateOne({ user: user._id }, { $set: { avatarUrl: info.picture ?? '' } });
       }
     }
+    if (user.status !== 'active') throw unauthorized('Account unavailable');
+    await LoginHistory.create({ user: user._id, success: true, method: 'google', ip: meta.ip ?? '', userAgent: meta.userAgent ?? '' });
+    if (meta.deviceId) await UserDevice.findOneAndUpdate({ user: user._id, deviceId: meta.deviceId }, { $set: { platform: 'android', lastSeenAt: new Date() } }, { upsert: true, new: true });
     const tokens = await issueTokens(String(user._id), user.role, meta.deviceId ?? '', meta.ip ?? '', meta.userAgent ?? '');
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
+  /**
+   * Refresh-token rotation with reuse detection.
+   *
+   * The presented token is consumed atomically (`findOneAndUpdate` on an
+   * unrevoked, unexpired session), so only one of two concurrent rotations can
+   * win. A token that has already been consumed is a replay:
+   *   - inside `REFRESH_REUSE_GRACE_MS` it is treated as a benign duplicate
+   *     request (two tabs / a retried network call) and rejected without
+   *     punishing the session that legitimately rotated;
+   *   - after the grace window, or when the token was revoked by logout rather
+   *     than rotation, it is treated as theft: the whole rotation family is
+   *     revoked, an audit entry and a system event are written, and the caller
+   *     gets a generic 401.
+   */
   async refresh(refreshToken: string): Promise<AuthTokens> {
     let payload: { sub: string };
     try {
@@ -136,40 +178,65 @@ export const authService = {
     } catch {
       throw unauthorized('Invalid or expired refresh token');
     }
-    const session = await UserSession.findOne({ refreshTokenHash: sha256(refreshToken), revokedAt: undefined });
-    if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+
+    const now = new Date();
+    const tokenHash = sha256(refreshToken);
+    const session = await UserSession.findOneAndUpdate(
+      { refreshTokenHash: tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: now } },
+      { $set: { revokedAt: now, rotatedAt: now, revokedReason: 'rotated' } },
+      { new: true },
+    );
+
+    if (!session) {
+      const prior = await UserSession.findOne({ refreshTokenHash: tokenHash });
+      if (!prior) throw unauthorized('Session expired or revoked');
+      const rotatedAt = prior.rotatedAt ? new Date(prior.rotatedAt as unknown as string).getTime() : 0;
+      const withinGrace = rotatedAt > 0 && Date.now() - rotatedAt <= env.REFRESH_REUSE_GRACE_MS;
+      if (withinGrace) throw unauthorized('Refresh token already rotated');
+
+      const family = (prior.family as string) || String(prior._id);
+      const revoked = await revokeFamily(prior.user, family, 'reuse_detected');
+      await auditService.log(String(prior.user), 'auth.refresh.reuse_detected', 'UserSession', String(prior._id), { family, revokedSessions: revoked });
+      await auditService.event('warn', 'auth', 'Refresh token reuse detected; rotation family revoked', { family, revokedSessions: revoked });
+      throw unauthorized('Session expired or revoked');
+    }
+
+    if (new Date(session.expiresAt).getTime() < Date.now()) {
       throw unauthorized('Session expired or revoked');
     }
     const user = await User.findById(payload.sub);
     if (!user || user.status !== 'active') throw unauthorized('Account unavailable');
 
-    // Rotate refresh token.
-    session.revokedAt = new Date();
-    await session.save();
-    return issueTokens(String(user._id), user.role, session.deviceId, session.ip, session.userAgent);
+    // Rotate within the same family so a stolen ancestor token can be contained.
+    return issueTokens(String(user._id), user.role, session.deviceId, session.ip, session.userAgent, (session.family as string) || String(session._id));
   },
 
   async logout(refreshToken: string): Promise<void> {
-    await UserSession.updateOne({ refreshTokenHash: sha256(refreshToken) }, { $set: { revokedAt: new Date() } });
+    await UserSession.updateOne(
+      { refreshTokenHash: sha256(refreshToken) },
+      { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
+    );
   },
 
   async forgotPassword(email: string): Promise<{ sent: boolean; token?: string }> {
+    if (env.NODE_ENV === 'production' && !hasEmail) throw new ApiError(503, 'EMAIL_NOT_CONFIGURED', 'Email delivery is not configured');
     const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) return { sent: false }; // Do not leak account existence.
+    if (!user) return { sent: true }; // Do not leak account existence.
     const token = randomToken();
     await PasswordReset.create({
       user: user._id,
       tokenHash: sha256(token),
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
+    await deliverActionEmail(user.email, 'reset-password', token);
     // Email delivery happens via the configured email provider (needs credentials).
     // Outside production (dev/test) the token is returned so flows can be tested;
     // in production it is delivered by email only.
-    return { sent: true, token: process.env.NODE_ENV !== 'production' ? token : undefined };
+    return { sent: true, token: process.env.NODE_ENV === 'test' ? token : undefined };
   },
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    const record = await PasswordReset.findOne({ tokenHash: sha256(token), usedAt: undefined });
+    const record = await PasswordReset.findOneAndUpdate({ tokenHash: sha256(token), usedAt: { $exists: false }, expiresAt: { $gt: new Date() } }, { $set: { usedAt: new Date() } }, { new: true });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired reset token');
     }
@@ -179,11 +246,21 @@ export const authService = {
     await user.save();
     record.usedAt = new Date();
     await record.save();
-    await UserSession.updateMany({ user: user._id }, { $set: { revokedAt: new Date() } });
+    await UserSession.updateMany({ user: user._id }, { $set: { revokedAt: new Date(), revokedReason: 'password_changed' } });
+    await auditService.log(String(user._id), 'auth.password.reset', 'User', String(user._id));
+  },
+
+  async resendVerification(userId: string): Promise<void> {
+    const user = await User.findById(userId);
+    if (!user || user.status !== 'active') throw notFound('Account unavailable');
+    if (user.emailVerified) return;
+    const token = randomToken();
+    await EmailVerification.create({ user: user._id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 86400000) });
+    await deliverActionEmail(user.email, 'verify-email', token);
   },
 
   async verifyEmail(token: string): Promise<void> {
-    const record = await EmailVerification.findOne({ tokenHash: sha256(token), usedAt: undefined });
+    const record = await EmailVerification.findOneAndUpdate({ tokenHash: sha256(token), usedAt: { $exists: false }, expiresAt: { $gt: new Date() } }, { $set: { usedAt: new Date() } }, { new: true });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired verification token');
     }
@@ -200,18 +277,20 @@ export const authService = {
     }
     user.passwordHash = await hashPassword(newPassword);
     await user.save();
-    await UserSession.updateMany({ user: userId }, { $set: { revokedAt: new Date() } });
+    await UserSession.updateMany({ user: userId }, { $set: { revokedAt: new Date(), revokedReason: 'password_changed' } });
   },
 
   async deleteAccount(userId: string): Promise<void> {
+    await auditService.log(userId, 'auth.account.delete', 'User', userId);
     const user = await User.findById(userId);
     if (!user) throw notFound('User not found');
     user.status = 'deleted';
     user.email = `deleted-${user._id}@deleted.local`;
-    user.username = `deleted-${user._id}`;
+    user.username = `del_${String(user._id).slice(-24)}`;
+    user.googleId = undefined;
     user.passwordHash = undefined;
     await user.save();
-    await UserSession.updateMany({ user: userId }, { $set: { revokedAt: new Date() } });
+    await UserSession.updateMany({ user: userId }, { $set: { revokedAt: new Date(), revokedReason: 'account_deleted' } });
   },
 
   async getMe(userId: string): Promise<unknown> {
@@ -224,7 +303,7 @@ export const authService = {
 };
 
 export function sanitizeUser(user: unknown): Record<string, unknown> {
-  const { passwordHash, ...rest } = user as Record<string, unknown>;
+  const { passwordHash, ...rest } = ((user as { toObject?: () => unknown }).toObject?.() ?? user) as Record<string, unknown>;
   void passwordHash;
   return rest;
 }

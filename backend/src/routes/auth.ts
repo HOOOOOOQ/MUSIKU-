@@ -1,3 +1,5 @@
+import { UserSession } from '../models';
+import { notFound } from '../utils/apiResponse';
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -5,7 +7,7 @@ import { validate } from '../middleware/validate';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { authService } from '../services/authService';
 import { ok, created, needsCredentials } from '../utils/apiResponse';
-import { hasGoogleOAuth } from '../config/env';
+import { googleOAuthConfig } from '../config/env';
 
 export const authRouter = Router();
 
@@ -22,7 +24,7 @@ const loginSchema = z.object({
   deviceId: z.string().max(128).optional(),
 });
 
-const googleSchema = z.object({ idToken: z.string().min(1) });
+const googleSchema = z.object({ idToken: z.string().min(1).max(8192), deviceId: z.string().max(128).optional() });
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 const forgotSchema = z.object({ email: z.string().email() });
 const resetSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8).max(128) });
@@ -37,6 +39,16 @@ const meta = (req: AuthedRequest) => ({
   deviceId: (req.body as { deviceId?: string })?.deviceId,
 });
 
+/**
+ * Public authentication capability list. Clients use it to avoid rendering a
+ * provider button the backend cannot actually verify. Contains no credentials.
+ */
+authRouter.get('/providers', (_req, res) => {
+  ok(res, [
+    { id: 'google', label: 'Google', enabled: googleOAuthConfig().configured, exchangeEndpoint: '/auth/google' },
+  ]);
+});
+
 authRouter.post('/register', validate(registerSchema), asyncHandler(async (req, res) => {
   const result = await authService.register(req.body);
   created(res, result);
@@ -48,8 +60,8 @@ authRouter.post('/login', validate(loginSchema), asyncHandler(async (req, res) =
 }));
 
 authRouter.post('/google', validate(googleSchema), asyncHandler(async (req, res) => {
-  if (!hasGoogleOAuth) {
-    needsCredentials(res, 'Google Sign-In', ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']);
+  if (!googleOAuthConfig().configured) {
+    needsCredentials(res, 'Google Sign-In', ['GOOGLE_WEB_CLIENT_ID']);
     return;
   }
   const result = await authService.loginWithGoogle(req.body.idToken, meta(req));
@@ -94,4 +106,21 @@ authRouter.post('/change-password', requireAuth, validate(changePasswordSchema),
 authRouter.delete('/account', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
   await authService.deleteAccount(req.userId!);
   ok(res, { deleted: true });
+}));
+
+authRouter.get('/sessions', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  ok(res, await UserSession.find({ user: req.userId, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }).select('_id deviceId userAgent createdAt expiresAt').sort({ createdAt: -1 }).limit(100).lean());
+}));
+authRouter.delete('/sessions/:id', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  const session = await UserSession.findOneAndUpdate({ _id: req.params.id, user: req.userId }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } }, { new: true });
+  if (!session) throw notFound('Session not found');
+  ok(res, { revoked: true });
+}));
+authRouter.post('/revoke-all', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  await UserSession.updateMany({ user: req.userId }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } });
+  ok(res, { revoked: true });
+}));
+
+authRouter.post('/resend-verification', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  await authService.resendVerification(req.userId!); ok(res, { sent: true });
 }));

@@ -1,7 +1,7 @@
 {
   "name": "musiku-plus-api",
   "version": "1.0.0",
-  "description": "MUSIKU+ backend API — Node.js, Express, TypeScript, MongoDB Atlas (Mongoose)",
+  "description": "MUSIKU+ backend API \u2014 Node.js, Express, TypeScript, MongoDB Atlas (Mongoose)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "seed": "ts-node --transpile-only src/config/seed.ts",
     "db:init": "ts-node --transpile-only src/config/initDb.ts",
-    "test:atlas": "ts-node --transpile-only scripts/verify-atlas.ts"
+    "atlas:preflight": "ts-node --transpile-only scripts/atlas-preflight.ts",
+    "test:atlas": "ts-node --transpile-only scripts/verify-atlas.ts",
+    "test:atlas:integration": "npm run atlas:preflight && jest --runInBand --config jest.atlas.config.js"
   },
   "engines": {
     "node": ">=20"
@@ -23,10 +25,13 @@
     "dotenv": "^18.0.10",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
+    "google-auth-library": "^11.3.4",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.2",
     "morgan": "^1.10.0",
+    "nodemailer": "^10.6.1",
+    "stripe": "^23.2.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -37,6 +42,7 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.14.12",
+    "@types/nodemailer": "^8.0.2",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
     "supertest": "^7.0.0",

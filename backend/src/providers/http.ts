@@ -1,3 +1,4 @@
+import { providerContext } from './context';
 /**
  * Minimal HTTP helper over global fetch (Node >= 18).
  * - Per-request timeout via AbortController
@@ -25,7 +26,8 @@ export class ProviderHttpError extends Error {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function fetchJson<T>(url: string, opts: HttpOptions = {}): Promise<T> {
-  const { timeoutMs = 8000, retries = 2, headers = {}, method = 'GET', body } = opts;
+  const context = providerContext.getStore();
+  const { timeoutMs = context?.timeoutMs ?? 8000, retries = context?.retries ?? 2, headers = {}, method = 'GET', body } = opts;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {

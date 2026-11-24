@@ -104,7 +104,7 @@ export default function ProvidersPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Type</label>
               <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                {['music_metadata', 'music_artwork', 'music_lyrics', 'music_audio', 'anime_metadata', 'anime_artwork', 'anime_schedule', 'anime_video', 'anime_subtitle'].map((t) => (
+                {['music_metadata', 'music_artwork', 'music_lyrics', 'music_audio', 'anime_metadata', 'animeku', 'anime_artwork', 'anime_schedule', 'anime_video', 'anime_subtitle'].map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
@@ -128,6 +128,26 @@ export default function ProvidersPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Priority (lower = tried first)</label>
               <input className="input" type="number" value={form.priority ?? 100} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Timeout (ms)</label>
+              <input className="input" type="number" min={1000} max={60000} value={form.timeoutMs ?? 8000} onChange={(e) => setForm({ ...form, timeoutMs: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Max retries</label>
+              <input className="input" type="number" min={0} max={5} value={form.maxRetries ?? 2} onChange={(e) => setForm({ ...form, maxRetries: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Cache TTL (s)</label>
+              <input className="input" type="number" min={0} max={86400} value={form.cacheTtlSec ?? 3600} onChange={(e) => setForm({ ...form, cacheTtlSec: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Rate limit / min</label>
+              <input className="input" type="number" min={1} max={10000} value={form.rateLimitPerMin ?? 60} onChange={(e) => setForm({ ...form, rateLimitPerMin: Number(e.target.value) })} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">Notes</label>
+              <input className="input" value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">API Key (write-only, never displayed)</label>
