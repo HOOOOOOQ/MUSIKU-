@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'api.dart';
 
@@ -43,3 +44,17 @@ class GoogleAuth {
     return true;
   }
 }
+
+/// True only when the backend explicitly reports Google as enabled, so the UI
+/// never renders a sign-in button whose token exchange would be rejected.
+/// An unreachable backend is treated as "not available" rather than assumed on.
+final googleAvailableProvider = FutureProvider<bool>((ref) async {
+  try {
+    final data = await ref.watch(apiProvider).get('/auth/providers');
+    return records(data).any(
+      (provider) => provider['id'] == 'google' && provider['enabled'] == true,
+    );
+  } catch (_) {
+    return false;
+  }
+});

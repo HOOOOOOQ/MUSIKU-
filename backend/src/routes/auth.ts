@@ -39,6 +39,16 @@ const meta = (req: AuthedRequest) => ({
   deviceId: (req.body as { deviceId?: string })?.deviceId,
 });
 
+/**
+ * Public authentication capability list. Clients use it to avoid rendering a
+ * provider button the backend cannot actually verify. Contains no credentials.
+ */
+authRouter.get('/providers', (_req, res) => {
+  ok(res, [
+    { id: 'google', label: 'Google', enabled: hasGoogleOAuth, exchangeEndpoint: '/auth/google' },
+  ]);
+});
+
 authRouter.post('/register', validate(registerSchema), asyncHandler(async (req, res) => {
   const result = await authService.register(req.body);
   created(res, result);

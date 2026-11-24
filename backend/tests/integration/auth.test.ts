@@ -151,3 +151,16 @@ describe('session security regressions (fake database)', () => {
     expect(response.status).toBe(200);expect(response.body.data.sent).toBe(true);expect(response.body.data.token).toBeUndefined();
   });
 });
+
+describe('public authentication capabilities', () => {
+  it('reports Google as unavailable without backend credentials and leaks no secret', async () => {
+    const response = await request(app).get('/api/auth/providers');
+    expect(response.status).toBe(200);
+    const google = (response.body.data as { id: string; enabled: boolean; exchangeEndpoint: string }[])
+      .find((provider) => provider.id === 'google');
+    expect(google).toBeDefined();
+    expect(google!.enabled).toBe(false);
+    expect(google!.exchangeEndpoint).toBe('/auth/google');
+    expect(JSON.stringify(response.body)).not.toMatch(/client_secret|clientSecret|GOOGLE_CLIENT/i);
+  });
+});

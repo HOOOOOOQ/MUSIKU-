@@ -190,120 +190,141 @@ class _AuthState extends ConsumerState<AuthScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'MUSIKU+',
-                style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900),
-              ),
-              Text(register ? 'Buat akun baru' : 'Selamat datang kembali'),
-              const SizedBox(height: 32),
-              TextField(
-                controller: email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              const SizedBox(height: 16),
-              if (register) ...[
+  Widget build(BuildContext context) {
+    // `null` while the capability request is in flight: the Google button stays
+    // hidden until the backend confirms it can verify Google ID tokens.
+    final backendGoogleEnabled = ref.watch(googleAvailableProvider).value;
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(28),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'MUSIKU+',
+                  style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900),
+                ),
+                Text(register ? 'Buat akun baru' : 'Selamat datang kembali'),
+                const SizedBox(height: 32),
                 TextField(
-                  controller: username,
-                  decoration: const InputDecoration(labelText: 'Username'),
+                  controller: email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email'),
                 ),
                 const SizedBox(height: 16),
-              ],
-              TextField(
-                controller: password,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
-              ),
-              if (error != null)
-                Padding(padding: const EdgeInsets.all(12), child: Text(error!)),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setState(() {
-                          busy = true;
-                          error = null;
-                        });
-                        try {
-                          await ref
-                              .read(apiProvider)
-                              .login(
-                                email.text.trim(),
-                                password.text,
-                                username: register
-                                    ? username.text.trim()
-                                    : null,
-                              );
-                          if (context.mounted) context.go('/');
-                        } catch (e) {
-                          if (mounted) setState(() => error = errorMessage(e));
-                        } finally {
-                          if (mounted) setState(() => busy = false);
-                        }
-                      },
-                child: Text(
-                  busy
-                      ? 'Memproses…'
-                      : register
-                      ? 'Daftar'
-                      : 'Masuk',
+                if (register) ...[
+                  TextField(
+                    controller: username,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextField(
+                  controller: password,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Password'),
                 ),
-              ),
-              if (googleWebClientId.isNotEmpty)
-                OutlinedButton(
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(error!),
+                  ),
+                const SizedBox(height: 24),
+                FilledButton(
                   onPressed: busy
                       ? null
                       : () async {
-                          setState(() => busy = true);
+                          setState(() {
+                            busy = true;
+                            error = null;
+                          });
                           try {
-                            final ok = await GoogleAuth(
-                              ref.read(apiProvider),
-                              GoogleIdentityProvider(),
-                            ).signIn();
-                            if (ok && context.mounted) context.go('/');
+                            await ref
+                                .read(apiProvider)
+                                .login(
+                                  email.text.trim(),
+                                  password.text,
+                                  username: register
+                                      ? username.text.trim()
+                                      : null,
+                                );
+                            if (context.mounted) context.go('/');
                           } catch (e) {
-                            if (mounted) {
+                            if (mounted)
                               setState(() => error = errorMessage(e));
-                            }
                           } finally {
                             if (mounted) setState(() => busy = false);
                           }
                         },
-                  child: const Text('Lanjutkan dengan Google'),
+                  child: Text(
+                    busy
+                        ? 'Memproses…'
+                        : register
+                        ? 'Daftar'
+                        : 'Masuk',
+                  ),
                 ),
-              TextButton(
-                onPressed: () => setState(() => register = !register),
-                child: Text(register ? 'Sudah punya akun? Masuk' : 'Buat akun'),
-              ),
-              TextButton(
-                onPressed: () => action(
-                  context,
-                  () => ref.read(apiProvider).send('/auth/forgot-password', {
-                    'email': email.text.trim(),
-                  }),
+                if (googleWebClientId.isNotEmpty &&
+                    backendGoogleEnabled == false)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Google sign-in belum diaktifkan di backend.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                if (googleWebClientId.isNotEmpty &&
+                    backendGoogleEnabled == true)
+                  OutlinedButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            setState(() => busy = true);
+                            try {
+                              final ok = await GoogleAuth(
+                                ref.read(apiProvider),
+                                GoogleIdentityProvider(),
+                              ).signIn();
+                              if (ok && context.mounted) context.go('/');
+                            } catch (e) {
+                              if (mounted) {
+                                setState(() => error = errorMessage(e));
+                              }
+                            } finally {
+                              if (mounted) setState(() => busy = false);
+                            }
+                          },
+                    child: const Text('Lanjutkan dengan Google'),
+                  ),
+                TextButton(
+                  onPressed: () => setState(() => register = !register),
+                  child: Text(
+                    register ? 'Sudah punya akun? Masuk' : 'Buat akun',
+                  ),
                 ),
-                child: const Text('Lupa password'),
-              ),
-              TextButton(
-                onPressed: () => context.push('/auth-action'),
-                child: const Text('Masukkan token reset / verifikasi'),
-              ),
-            ],
+                TextButton(
+                  onPressed: () => action(
+                    context,
+                    () => ref.read(apiProvider).send('/auth/forgot-password', {
+                      'email': email.text.trim(),
+                    }),
+                  ),
+                  child: const Text('Lupa password'),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/auth-action'),
+                  child: const Text('Masukkan token reset / verifikasi'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class HomeScreen extends StatelessWidget {
