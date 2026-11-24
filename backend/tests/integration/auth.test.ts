@@ -132,3 +132,22 @@ describe('Auth flow (fake models)', () => {
     expect(good.status).toBe(200);
   });
 });
+
+describe('session security regressions (fake database)', () => {
+  it('exactly one concurrent refresh succeeds', async () => {
+    const login = await request(app).post('/api/auth/login').send({ email: 'test@example.com', password: 'anotherpass789' });
+    const refreshToken = login.body.data.tokens.refreshToken;
+    const responses = await Promise.all([1,2].map(() => request(app).post('/api/auth/refresh').send({ refreshToken })));
+    expect(responses.map(r=>r.status).sort()).toEqual([200,401]);
+  });
+  it('logout immediately invalidates access JWT through session binding', async () => {
+    const login = await request(app).post('/api/auth/login').send({ email:'test@example.com',password:'anotherpass789' });
+    const tokens = login.body.data.tokens;
+    await request(app).post('/api/auth/logout').send({refreshToken:tokens.refreshToken});
+    expect((await request(app).get('/api/auth/me').set('Authorization',`Bearer ${tokens.accessToken}`)).status).toBe(401);
+  });
+  it('forgot response does not disclose nonexistent account', async () => {
+    const response=await request(app).post('/api/auth/forgot-password').send({email:'missing@example.com'});
+    expect(response.status).toBe(200);expect(response.body.data.sent).toBe(true);expect(response.body.data.token).toBeUndefined();
+  });
+});

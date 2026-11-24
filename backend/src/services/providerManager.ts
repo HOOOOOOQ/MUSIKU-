@@ -1,3 +1,4 @@
+import { providerContext } from '../providers/context';
 import { ApiProvider, ProviderCache, ProviderHealth, ProviderLog } from '../models/Provider';
 import { decryptSecret } from '../utils/crypto';
 
@@ -30,6 +31,7 @@ export interface ProviderRecord {
   maxRetries: number;
   cacheTtlSec: number;
   requiresCredentials: boolean;
+  rateLimitPerMin?: number;
 }
 
 export interface ExecuteOptions {
@@ -67,6 +69,7 @@ export class ProviderManager {
 
   async setCached(cacheKey: string, providerId: string, payload: unknown, ttlSec: number): Promise<void> {
     const expiresAt = new Date(Date.now() + ttlSec * 1000);
+    if (memoryCache.size >= 1000) memoryCache.delete(memoryCache.keys().next().value!);
     memoryCache.set(cacheKey, { value: payload, expiresAt: expiresAt.getTime() });
     await this.cacheModel.findOneAndUpdate(
       { cacheKey },
@@ -101,7 +104,7 @@ export class ProviderManager {
       const started = Date.now();
       try {
         const apiKey = await this.resolveApiKey(provider);
-        const result = await fn(provider, apiKey);
+        const result = await providerContext.run({ timeoutMs: provider.timeoutMs, retries: provider.maxRetries }, () => fn(provider, apiKey));
         const latency = Date.now() - started;
         await this.recordSuccess(provider, latency);
         if (!isEmpty(result)) {

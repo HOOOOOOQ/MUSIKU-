@@ -3,8 +3,8 @@ import { deliverActionEmail } from './emailService';
 import crypto from 'crypto';
 import { User, UserProfile, UserSession, UserPreference, UserDevice, LoginHistory, PasswordReset, EmailVerification, NotificationPreference, OAuthReplay } from '../models';
 import { hashPassword, verifyPassword, sha256, randomToken, signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/crypto';
-import { env, hasGoogleOAuth } from '../config/env';
-import { badRequest, unauthorized, conflict, notFound } from '../utils/apiResponse';
+import { env, hasGoogleOAuth, hasEmail } from '../config/env';
+import { ApiError, badRequest, unauthorized, conflict, notFound } from '../utils/apiResponse';
 
 export interface AuthTokens {
   accessToken: string;
@@ -39,6 +39,7 @@ async function ensureProfile(userId: string, displayName = ''): Promise<void> {
 
 export const authService = {
   async register(input: RegisterInput): Promise<{ user: unknown; tokens: AuthTokens }> {
+    if (env.NODE_ENV === 'production' && !hasEmail) throw new ApiError(503, 'EMAIL_NOT_CONFIGURED', 'Email delivery is not configured');
     const email = input.email.toLowerCase().trim();
     const username = input.username.toLowerCase().trim();
     const existing = await User.findOne({ $or: [{ email }, { username }] }).lean();
@@ -108,6 +109,7 @@ export const authService = {
     if (!user) {
       user = await User.findOne({ email: info.email!.toLowerCase() });
       if (user) {
+        if (user.status !== 'active') throw unauthorized('Account unavailable');
         if (!user.emailVerified || (user.googleId && user.googleId !== info.sub)) throw conflict('Verify the existing account email before linking Google');
         user.googleId = info.sub;
         await user.save();
@@ -115,7 +117,7 @@ export const authService = {
         const username = info.email!.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 24) || `user${Date.now()}`;
         user = await User.create({
           email: info.email!.toLowerCase(),
-          username: `${username}${Math.floor(Math.random() * 1000)}`,
+          username: `${username.slice(0, 17)}_${crypto.randomBytes(6).toString('hex')}`,
           googleId: info.sub,
           emailVerified: true,
           role: 'user',
@@ -155,6 +157,7 @@ export const authService = {
   },
 
   async forgotPassword(email: string): Promise<{ sent: boolean; token?: string }> {
+    if (env.NODE_ENV === 'production' && !hasEmail) throw new ApiError(503, 'EMAIL_NOT_CONFIGURED', 'Email delivery is not configured');
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) return { sent: true }; // Do not leak account existence.
     const token = randomToken();
@@ -167,11 +170,11 @@ export const authService = {
     // Email delivery happens via the configured email provider (needs credentials).
     // Outside production (dev/test) the token is returned so flows can be tested;
     // in production it is delivered by email only.
-    return { sent: true, token: process.env.NODE_ENV !== 'production' ? token : undefined };
+    return { sent: true, token: process.env.NODE_ENV === 'test' ? token : undefined };
   },
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    const record = await PasswordReset.findOne({ tokenHash: sha256(token), usedAt: { $exists: false } });
+    const record = await PasswordReset.findOneAndUpdate({ tokenHash: sha256(token), usedAt: { $exists: false }, expiresAt: { $gt: new Date() } }, { $set: { usedAt: new Date() } }, { new: true });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired reset token');
     }
@@ -184,8 +187,17 @@ export const authService = {
     await UserSession.updateMany({ user: user._id }, { $set: { revokedAt: new Date() } });
   },
 
+  async resendVerification(userId: string): Promise<void> {
+    const user = await User.findById(userId);
+    if (!user || user.status !== 'active') throw notFound('Account unavailable');
+    if (user.emailVerified) return;
+    const token = randomToken();
+    await EmailVerification.create({ user: user._id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 86400000) });
+    await deliverActionEmail(user.email, 'verify-email', token);
+  },
+
   async verifyEmail(token: string): Promise<void> {
-    const record = await EmailVerification.findOne({ tokenHash: sha256(token), usedAt: { $exists: false } });
+    const record = await EmailVerification.findOneAndUpdate({ tokenHash: sha256(token), usedAt: { $exists: false }, expiresAt: { $gt: new Date() } }, { $set: { usedAt: new Date() } }, { new: true });
     if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
       throw badRequest('Invalid or expired verification token');
     }

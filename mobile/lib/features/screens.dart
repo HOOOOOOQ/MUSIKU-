@@ -583,7 +583,7 @@ class DetailScreen extends ConsumerWidget {
                     );
                     if (playlist != null &&
                         playlist.isNotEmpty &&
-                        context.mounted)
+                        context.mounted) {
                       await action(
                         context,
                         () => ref.read(apiProvider).send(
@@ -593,6 +593,7 @@ class DetailScreen extends ConsumerWidget {
                           },
                         ),
                       );
+                    }
                   },
                   child: const Text('Tambahkan ke playlist'),
                 ),
@@ -900,7 +901,7 @@ class _VideoState extends ConsumerState<VideoScreen> {
       for (final entry in history) {
         if (entry['episodeId'] == widget.episodeId &&
             entry['completed'] != true) {
-          await player.seek(
+          await player.seekTo(
             Duration(seconds: (entry['positionSec'] as num? ?? 0).toInt()),
           );
           break;
@@ -997,8 +998,9 @@ class _VideoState extends ConsumerState<VideoScreen> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (value != null)
+                    if (value != null) {
                       action(context, () => selectSubtitle(value));
+                    }
                   },
                 ),
                 PopupMenuButton<double>(

@@ -46,6 +46,13 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('noreply@musikuplus.app'),
   ADMIN_EMAIL: z.string().default('admin@musikuplus.app'),
   ADMIN_PASSWORD: z.string().default(''),
+}).superRefine((config, context) => {
+  const groups = [ ['SMTP_HOST','SMTP_USER','SMTP_PASSWORD'], ['LICENSED_MUSIC_API_KEY','LICENSED_MUSIC_BASE_URL'], ['LICENSED_ANIME_API_KEY','LICENSED_ANIME_BASE_URL'], ['PAYMENT_PROVIDER','PAYMENT_SECRET_KEY','PAYMENT_WEBHOOK_SECRET'] ] as const;
+  for (const group of groups) {
+    if (group.some(key => Boolean(config[key])) && !group.every(key => Boolean(config[key]))) context.addIssue({ code: 'custom', path: [group[0]], message: `Configure all of ${group.join(', ')} or leave all empty` });
+  }
+  if (config.PAYMENT_PROVIDER && config.PAYMENT_PROVIDER !== 'stripe') context.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'Only the implemented stripe adapter is supported' });
+  if (config.NODE_ENV === 'production' && !config.MONGODB_URI.startsWith('mongodb+srv://')) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: 'Production requires Atlas mongodb+srv TLS URI' });
 });
 
 export type Env = z.infer<typeof envSchema>;

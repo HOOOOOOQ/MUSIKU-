@@ -99,7 +99,7 @@ class _SplashState extends ConsumerState<SplashScreen> {
     final storage = ref.read(apiProvider).storage;
     final onboarded = await storage.read(key: 'onboarded');
     final token = await storage.read(key: 'accessToken');
-    if (mounted)
+    if (mounted) {
       context.go(
         onboarded == null
             ? '/onboarding'
@@ -107,6 +107,7 @@ class _SplashState extends ConsumerState<SplashScreen> {
             ? '/login'
             : '/',
       );
+    }
   }
 
   @override

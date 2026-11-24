@@ -110,3 +110,7 @@ authRouter.post('/revoke-all', requireAuth, asyncHandler(async (req: AuthedReque
   await UserSession.updateMany({ user: req.userId }, { $set: { revokedAt: new Date() } });
   ok(res, { revoked: true });
 }));
+
+authRouter.post('/resend-verification', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  await authService.resendVerification(req.userId!); ok(res, { sent: true });
+}));
