@@ -72,10 +72,9 @@ jobs:
             python3 ../scripts/ci_notice.py ci-logs/tests.log 'Flutter tests'
             exit "$status"
           fi
-          # Flutter colourises its reporter output, so strip ANSI escapes before matching.
-          summary=$(tr '\r' '\n' < ci-logs/tests.log | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '\+[0-9]+( *-[0-9]+)?( *~[0-9]+)?: (All tests passed|No tests ran)' | tail -1)
-          files=$(ls test | grep -c '_test\.dart$')
-          echo "::notice title=Flutter tests::PASS — ${summary:-see log} | test files: ${files}"
+          # Flutter's reporter uses carriage returns and ANSI colours, so the
+          # summary is parsed by a script instead of a fragile shell grep.
+          python3 ../scripts/report_flutter_tests.py ci-logs/tests.log test
       - name: Build debug APK
         run: |
           set +e
