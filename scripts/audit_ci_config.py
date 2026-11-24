@@ -152,6 +152,21 @@ def main() -> int:
     print(f"- GitHub build-status token: {classify(github_build_token)}")
     print("\nSecret values are never echoed, written to files, uploaded as artifacts, or exposed through the API.")
 
+    # Surface the outcome as an annotation as well: GitHub's log archive is not
+    # always downloadable from automation, and annotations can be read through
+    # the check-run API. Names and booleans only — never a value.
+    optional = {
+        "Android release signing": signing_ready,
+        "Public API origin for APK builds": api_ready,
+        "GitHub build-status token": classify(github_build_token) == "present",
+    }
+    notice = (
+        "required detected: " + (", ".join(name for name, ok in required.items() if ok) or "none")
+        + " | required missing: " + (", ".join(missing) or "none")
+        + " | optional detected: " + (", ".join(name for name, ok in optional.items() if ok) or "none")
+    )
+    print(f"::notice title=CI configuration::{notice}")
+
     outputs = os.environ.get("GITHUB_OUTPUT")
     if outputs:
         with open(outputs, "a", encoding="utf-8") as handle:
