@@ -1,3 +1,5 @@
+import { UserSession } from '../models';
+import { notFound } from '../utils/apiResponse';
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -94,4 +96,17 @@ authRouter.post('/change-password', requireAuth, validate(changePasswordSchema),
 authRouter.delete('/account', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
   await authService.deleteAccount(req.userId!);
   ok(res, { deleted: true });
+}));
+
+authRouter.get('/sessions', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  ok(res, await UserSession.find({ user: req.userId, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }).select('_id deviceId userAgent createdAt expiresAt').sort({ createdAt: -1 }).limit(100).lean());
+}));
+authRouter.delete('/sessions/:id', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  const session = await UserSession.findOneAndUpdate({ _id: req.params.id, user: req.userId }, { $set: { revokedAt: new Date() } }, { new: true });
+  if (!session) throw notFound('Session not found');
+  ok(res, { revoked: true });
+}));
+authRouter.post('/revoke-all', requireAuth, asyncHandler(async (req: AuthedRequest, res) => {
+  await UserSession.updateMany({ user: req.userId }, { $set: { revokedAt: new Date() } });
+  ok(res, { revoked: true });
 }));

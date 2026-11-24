@@ -1,6 +1,8 @@
 import '../core/google_auth.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
+// Material compatibility export retained for supported Flutter stable versions.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,15 +18,17 @@ Future<void> action(
 ) async {
   try {
     await work();
-    if (context.mounted)
+    if (context.mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Berhasil')));
+    }
   } catch (e) {
-    if (context.mounted)
+    if (context.mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(errorMessage(e))));
+    }
   }
 }
 
@@ -268,8 +272,9 @@ class _AuthState extends ConsumerState<AuthScreen> {
                             ).signIn();
                             if (ok && context.mounted) context.go('/');
                           } catch (e) {
-                            if (mounted)
+                            if (mounted) {
                               setState(() => error = errorMessage(e));
+                            }
                           } finally {
                             if (mounted) setState(() => busy = false);
                           }
@@ -509,8 +514,9 @@ class DetailScreen extends ConsumerWidget {
       child: Remote(
         path: path,
         builder: (data) {
-          if (data == null)
+          if (data == null) {
             return const Center(child: Text('Konten tidak ditemukan'));
+          }
           final item = Map<String, dynamic>.from(data);
           final image = (item['artworkUrl'] ?? item['posterUrl'] ?? '')
               .toString();
@@ -536,8 +542,9 @@ class DetailScreen extends ConsumerWidget {
                   label: const Text('Putar preview resmi'),
                   onPressed: () => action(context, () async {
                     final url = item['previewUrl']?.toString() ?? '';
-                    if (url.isEmpty)
+                    if (url.isEmpty) {
                       throw Exception('Preview tidak tersedia dari provider');
+                    }
                     await audio.load(
                       MediaItem(
                         id: url,
@@ -652,11 +659,12 @@ class LibraryScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         onPressed: () async {
           final name = await prompt(context, 'Nama playlist');
-          if (name != null && name.isNotEmpty && context.mounted)
+          if (name != null && name.isNotEmpty && context.mounted) {
             await action(
               context,
               () => ref.read(apiProvider).send('/playlists', {'name': name}),
             );
+          }
         },
       ),
     ],
@@ -690,13 +698,14 @@ class ResourceScreen extends StatelessWidget {
     child: Remote(
       path: path,
       builder: (data) {
-        if (data is Map && data.containsKey('plain'))
+        if (data is Map && data.containsKey('plain')) {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: SelectableText(
               data['plain']?.toString() ?? 'Lirik tidak tersedia',
             ),
           );
+        }
         final items = records(data);
         if (items.isEmpty) return const Center(child: Text('Belum ada data.'));
         return ListView(
@@ -750,13 +759,14 @@ class ProfileScreen extends ConsumerWidget {
           title: const Text('Ubah nama tampilan'),
           onTap: () async {
             final name = await prompt(context, 'Nama tampilan');
-            if (name != null && context.mounted)
+            if (name != null && context.mounted) {
               await action(
                 context,
                 () => ref.read(apiProvider).send('/users/profile', {
                   'displayName': name,
                 }, method: 'PATCH'),
               );
+            }
           },
         ),
         for (final e in [
@@ -875,8 +885,9 @@ class _VideoState extends ConsumerState<VideoScreen> {
           .read(apiProvider)
           .get('/anime/${widget.animeId}/episodes/${widget.episodeId}/stream');
       final url = result['streamUrl']?.toString() ?? '';
-      if (url.isEmpty)
+      if (url.isEmpty) {
         throw Exception('Provider tidak mengembalikan stream berlisensi.');
+      }
       subtitles = records(result['subtitles']);
       final player = VideoPlayerController.networkUrl(Uri.parse(url));
       controller = player;

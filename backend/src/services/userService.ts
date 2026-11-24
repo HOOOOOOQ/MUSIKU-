@@ -1,4 +1,4 @@
-import { User, UserProfile, UserPreference, UserDevice, LoginHistory, LikedSong, FollowedArtist, SavedAlbum, AnimeWatchlist, AnimeFavorite, AnimeWatchHistory, MusicHistory } from '../models';
+import { UserSession, User, UserProfile, UserPreference, UserDevice, LoginHistory, LikedSong, FollowedArtist, SavedAlbum, AnimeWatchlist, AnimeFavorite, AnimeWatchHistory, MusicHistory } from '../models';
 import { notFound, conflict } from '../utils/apiResponse';
 
 export const userService = {
@@ -63,6 +63,7 @@ export const userService = {
   },
 
   async removeDevice(userId: string, deviceId: string) {
+    await UserSession.updateMany({ user: userId, deviceId }, { $set: { revokedAt: new Date() } });
     const res = await UserDevice.deleteOne({ user: userId, deviceId });
     if (res.deletedCount === 0) throw notFound('Device not found');
   },

@@ -32,8 +32,9 @@ class MusikuAudio extends BaseAudioHandler with SeekHandler {
       );
     });
     player.currentIndexStream.listen((index) {
-      if (index != null && index < queue.value.length)
+      if (index != null && index < queue.value.length) {
         mediaItem.add(queue.value[index]);
+      }
     });
   }
   Future<void> load(MediaItem item) async {

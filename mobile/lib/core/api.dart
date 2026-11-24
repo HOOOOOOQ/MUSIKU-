@@ -69,8 +69,9 @@ class Api {
 
   Future<void> saveTokens(Map<String, dynamic> tokens) async {
     for (final key in ['accessToken', 'refreshToken']) {
-      if (tokens[key] is String)
+      if (tokens[key] is String) {
         await storage.write(key: key, value: tokens[key] as String);
+      }
     }
   }
 
@@ -123,21 +124,24 @@ class Api {
 String errorMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
-    if (data is Map)
+    if (data is Map) {
       return data['error']?['message']?.toString() ?? 'Request failed';
+    }
     return 'Tidak dapat terhubung. Periksa koneksi lalu coba lagi.';
   }
   return error.toString();
 }
 
 List<Map<String, dynamic>> records(dynamic data) {
-  if (data is List)
+  if (data is List) {
     return data
         .whereType<Map>()
         .map((v) => Map<String, dynamic>.from(v))
         .toList();
-  if (data is Map)
+  }
+  if (data is Map) {
     return records(data['items'] ?? data['tracks'] ?? data['trending'] ?? []);
+  }
   return [];
 }
 

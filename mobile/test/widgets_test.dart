@@ -1,3 +1,5 @@
+// Material compatibility export retained for supported Flutter stable versions.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

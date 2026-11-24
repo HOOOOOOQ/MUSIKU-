@@ -1,3 +1,5 @@
+// Material compatibility export retained for supported Flutter stable versions.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api.dart';
@@ -57,8 +59,9 @@ class _AuthActionState extends ConsumerState<AuthActionScreen> {
                         if (reset) 'newPassword': password.text,
                       },
                     );
-                    if (mounted)
+                    if (mounted) {
                       setState(() => message = 'Berhasil. Silakan masuk.');
+                    }
                   } catch (e) {
                     if (mounted) setState(() => message = errorMessage(e));
                   } finally {

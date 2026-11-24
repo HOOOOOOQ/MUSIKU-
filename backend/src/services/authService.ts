@@ -19,9 +19,8 @@ export interface RegisterInput {
 }
 
 async function issueTokens(userId: string, role: string, deviceId = '', ip = '', userAgent = ''): Promise<AuthTokens> {
-  const accessToken = signAccessToken(userId, role);
   const refreshToken = signRefreshToken(userId);
-  await UserSession.create({
+  const session = await UserSession.create({
     user: userId,
     refreshTokenHash: sha256(refreshToken),
     deviceId,
@@ -29,7 +28,7 @@ async function issueTokens(userId: string, role: string, deviceId = '', ip = '',
     userAgent,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
-  return { accessToken, refreshToken };
+  return { accessToken: signAccessToken(userId, role, String(session._id)), refreshToken };
 }
 
 async function ensureProfile(userId: string, displayName = ''): Promise<void> {
