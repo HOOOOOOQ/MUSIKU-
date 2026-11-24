@@ -10,7 +10,10 @@ permissions:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel: the Dart format step can push a follow-up commit, and the run
+  # that produced it must still finish (build + scan + upload) so the check on
+  # the previous sha stays truthful.
+  cancel-in-progress: false
 
 # Secret handling rules enforced by this workflow:
 #   * secrets are injected only into the job/steps that need them (per-step `env:`);
@@ -64,9 +67,29 @@ jobs:
       # it neither re-triggers this workflow nor cancels the running job
       # through the concurrency group. On pull-request runs (possibly from a
       # fork, where the token cannot push) unformatted sources fail the build.
+      # Canonical formatting is enforced, and the formatter also heals the
+      # branch: `dart format` is deterministic, so committing its output cannot
+      # change behaviour. Fork pull requests cannot be pushed to, so there the
+      # check simply fails and lists the offending files.
       - name: Format Dart sources
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
         run: |
           set -o pipefail
+          can_push=true
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if [[ -n "$PR_HEAD_REPO" && "$PR_HEAD_REPO" != "$REPO" ]]; then
+              can_push=false
+            else
+              # checkout leaves a detached merge ref for pull_request events;
+              # the fix-up commit has to land on the real head branch.
+              git fetch --no-tags origin "+refs/heads/$HEAD_BRANCH:refs/remotes/origin/$HEAD_BRANCH"
+              git checkout -B "$HEAD_BRANCH" "origin/$HEAD_BRANCH"
+            fi
+          fi
           dart format lib test 2>&1 | tee ci-logs/format.log
           if [[ -z "$(git status --porcelain lib test)" ]]; then
             echo "::notice title=Dart format::PASS - lib and test are canonically formatted"
@@ -74,17 +97,16 @@ jobs:
             exit 0
           fi
           changed=$(git status --porcelain lib test | awk '{print $2}' | tr '\n' ' ')
-          if [[ "${{ github.event_name }}" != "push" ]]; then
-            echo "::error title=Dart format::not dart-format clean and cannot be fixed on a ${{ github.event_name }} run: $changed"
+          if [[ "$can_push" != "true" ]]; then
+            echo "::error title=Dart format::sources are not dart-format clean and a fork pull request cannot be auto-formatted: $changed"
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib test
-          git commit -m "style(mobile): apply dart format ($changed) [skip ci]"
-          git pull --rebase origin "$GITHUB_REF_NAME"
-          git push origin "HEAD:$GITHUB_REF_NAME"
-          echo "::notice title=Dart format::reformatted and pushed a [skip ci] style commit: $changed"
+          git commit -m "style(mobile): apply dart format ($changed)"
+          git push origin "HEAD:$HEAD_BRANCH"
+          echo "::notice title=Dart format::reformatted and pushed a style commit to $HEAD_BRANCH: $changed"
           dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: |
