@@ -317,32 +317,37 @@ void main() {
 
     test('the schedule day falls back today → all → first non-empty', () {
       final days = <Map<String, dynamic>>[
-        <String, dynamic>{
-          'key': 'all',
-          'label': 'Semua',
-          'items': <Map<String, dynamic>>[],
-        },
+        <String, dynamic>{'key': 'all', 'items': <Map<String, dynamic>>[]},
         <String, dynamic>{
           'key': 'rabu',
-          'label': 'Rabu',
-          'items': <Map<String, dynamic>>[
-            <String, dynamic>{'title': 'x'},
-          ],
+          'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'x'}],
         },
       ];
+      // An explicit choice wins even when another bucket has more items.
       expect(pickScheduleDay(days, 'rabu')['key'], 'rabu');
-      expect(pickScheduleDay(days, 'senin')['key'], 'all');
+      // Today is absent and "Semua" is empty: land on a day that has items.
+      expect(pickScheduleDay(days, 'senin')['key'], 'rabu');
+      // A populated "Semua" bucket wins over any single day.
+      expect(
+        pickScheduleDay(<Map<String, dynamic>>[
+          <String, dynamic>{
+            'key': 'all',
+            'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'a'}],
+          },
+          <String, dynamic>{
+            'key': 'kamis',
+            'items': <Map<String, dynamic>>[<String, dynamic>{'title': 'y'}],
+          },
+        ], 'senin')['key'],
+        'all',
+      );
+      // Nothing anywhere: keep the first bucket so its empty state renders.
       expect(
         pickScheduleDay(<Map<String, dynamic>>[
           <String, dynamic>{'key': 'all', 'items': <Map<String, dynamic>>[]},
-          <String, dynamic>{
-            'key': 'kamis',
-            'items': <Map<String, dynamic>>[
-              <String, dynamic>{'title': 'y'},
-            ],
-          },
+          <String, dynamic>{'key': 'kamis', 'items': <Map<String, dynamic>>[]},
         ], 'senin')['key'],
-        'kamis',
+        'all',
       );
       expect(pickScheduleDay(<Map<String, dynamic>>[]), <String, dynamic>{});
     });

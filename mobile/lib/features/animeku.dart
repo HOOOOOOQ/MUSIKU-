@@ -173,8 +173,11 @@ Map<String, dynamic> pickScheduleDay(
   for (final day in days) {
     if (textOf(day['key']) == wanted) return day;
   }
+  // An empty "Semua" bucket is not a useful landing day: skip it so a day that
+  // actually has items is selected instead.
   for (final day in days) {
-    if (textOf(day['key']) == 'all') return day;
+    if (textOf(day['key']) != 'all') continue;
+    if (asList(day['items']).isNotEmpty) return day;
   }
   for (final day in days) {
     if (asList(day['items']).isNotEmpty) return day;
