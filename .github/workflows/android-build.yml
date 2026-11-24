@@ -49,10 +49,23 @@ jobs:
           done < ci-logs/analyze.log
           exit "$status"
       - name: Test
-        run: flutter test 2>&1 | tee ci-logs/tests.log
+        run: |
+          set +e
+          flutter test 2>&1 | tee ci-logs/tests.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            tail -40 ci-logs/tests.log | while IFS= read -r line; do echo "::notice title=Flutter tests::${line//'%'/'%25'}"; done
+          fi
+          exit "$status"
       - name: Build debug APK
         run: |
+          set +e
           flutter build apk --debug --dart-define="API_URL=${API_URL:-https://api.example.invalid/api}" --dart-define="GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID" 2>&1 | tee ci-logs/debug-build.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            tail -45 ci-logs/debug-build.log | while IFS= read -r line; do echo "::notice title=Android debug build::${line//'%'/'%25'}"; done
+            exit "$status"
+          fi
           test -s build/app/outputs/flutter-apk/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:

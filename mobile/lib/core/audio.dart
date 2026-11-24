@@ -4,8 +4,9 @@ import 'package:just_audio/just_audio.dart';
 late MusikuAudio audio;
 
 class MusikuAudio extends BaseAudioHandler with SeekHandler {
-  final player = AudioPlayer();
-  MusikuAudio() {
+  final AudioPlayer player;
+  MusikuAudio({AudioPlayer? audioPlayer})
+    : player = audioPlayer ?? AudioPlayer() {
     player.playbackEventStream.listen((event) {
       playbackState.add(
         PlaybackState(
