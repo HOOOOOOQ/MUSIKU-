@@ -200,9 +200,19 @@ void main() {
       isTrue,
     );
 
+    // Sharing copies the real backend share URL through the platform clipboard.
     await tester.tap(find.text('Bagikan'));
     await tester.pumpAndSettle();
-    expect(find.text('Tautan berbagi disalin.'), findsOneWidget);
+    expect(
+      platformCalls.any(
+        (call) =>
+            call.method == 'Clipboard.setData' &&
+            (call.arguments as Map)['text'].toString().endsWith(
+              '/playlists/shared/token123',
+            ),
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('shared playlist opens read-only through its token', (
