@@ -47,7 +47,7 @@ Only after a successful signed build and device testing: open **Releases → Dra
 
 ## Current status (2026-11-24)
 
-The Android workflow has been executed on GitHub and passed: run [45340616795](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795) produced artifact **musiku-plus-debug-apk** (84,293,175 bytes) with `flutter analyze` reporting "No issues found" and `flutter test` passing. Release steps were skipped because the four signing secrets are absent and the event was a pull request — **no signed release APK exists yet**. The `verify.yml` Node workflow passed on the same commit: run [45340616814](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616814). Neither `API_URL` nor `GOOGLE_WEB_CLIENT_ID` was configured, so that debug artifact embeds the nonfunctional default API origin and hides the Google button.
+The Android workflow has been executed on GitHub and passed: run [45345204617](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204617) produced artifact **musiku-plus-debug-apk** (84,329,106 bytes) with `flutter analyze` reporting "No issues found" and all 17 `flutter test` tests passing. Release steps were skipped because the four signing secrets are absent and the event was a pull request — **no signed release APK exists yet**. The `verify.yml` Node workflow passed on the same commit: run [45345204565](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45345204565), and it has been green on every commit of this branch. Neither `API_URL` nor `GOOGLE_WEB_CLIENT_ID` was configured, so that debug artifact embeds the nonfunctional default API origin and hides the Google button.
 
 ## Troubleshooting
 
