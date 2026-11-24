@@ -671,8 +671,12 @@ class LibraryScreen extends ConsumerWidget {
     ],
     child: ListView(
       children: [
+        ListTile(
+          title: const Text('Playlist'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push('/playlists'),
+        ),
         for (final entry in [
-          ('Playlist', '/playlists'),
           ('Lagu disukai', '/library/liked-songs'),
           ('Watchlist', '/library/watchlist'),
           ('Anime favorit', '/library/anime-favorites'),

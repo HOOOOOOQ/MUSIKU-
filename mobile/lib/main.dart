@@ -9,6 +9,7 @@ import 'core/api.dart';
 import 'features/auth_action.dart';
 import 'features/account_security.dart';
 import 'features/notifications.dart';
+import 'features/playlists.dart';
 import 'features/premium.dart';
 import 'core/audio.dart';
 import 'features/screens.dart';
@@ -51,6 +52,17 @@ final router = GoRouter(
       builder: (_, __) => const NotificationsScreen(),
     ),
     GoRoute(path: '/premium', builder: (_, __) => const PremiumScreen()),
+    GoRoute(path: '/playlists', builder: (_, __) => const PlaylistListScreen()),
+    GoRoute(
+      path: '/shared-playlist/:token',
+      builder: (_, state) =>
+          SharedPlaylistScreen(token: state.pathParameters['token']!),
+    ),
+    GoRoute(
+      path: '/playlist/:id',
+      builder: (_, state) =>
+          PlaylistDetailScreen(id: state.pathParameters['id']!),
+    ),
     GoRoute(path: '/auth-action', builder: (_, __) => const AuthActionScreen()),
     GoRoute(path: '/login', builder: (_, __) => const AuthScreen()),
     GoRoute(path: '/', builder: (_, __) => const HomeScreen()),

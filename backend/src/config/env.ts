@@ -8,7 +8,7 @@ import { z } from 'zod';
  * optional — features that need them return `needs_credentials` errors
  * instead of pretending to work.
  */
-const envSchema = z.object({
+export const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required (MongoDB Atlas connection string)'),
   MONGODB_DB_NAME: z.string().default('musiku_plus'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
@@ -42,16 +42,19 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().default(''),
   SMTP_SECURE: z.enum(['true', 'false']).default('false'),
   EMAIL_ACTION_URL: z.string().url().default('https://musikuplus.app/auth'),
-  EMAIL_PROVIDER: z.string().optional().default(''),
-  EMAIL_API_KEY: z.string().optional().default(''),
+  // Only the implemented SMTP adapter is accepted; naming another provider is a
+  // startup error instead of a silently ignored configuration.
+  EMAIL_PROVIDER: z.enum(['', 'smtp']).default(''),
   EMAIL_FROM: z.string().default('noreply@musikuplus.app'),
   ADMIN_EMAIL: z.string().default('admin@musikuplus.app'),
   ADMIN_PASSWORD: z.string().default(''),
 }).superRefine((config, context) => {
-  const groups = [ ['SMTP_HOST','SMTP_USER','SMTP_PASSWORD'], ['LICENSED_MUSIC_API_KEY','LICENSED_MUSIC_BASE_URL'], ['LICENSED_ANIME_API_KEY','LICENSED_ANIME_BASE_URL'], ['PAYMENT_PROVIDER','PAYMENT_SECRET_KEY','PAYMENT_WEBHOOK_SECRET'] ] as const;
+  const groups = [ ['SMTP_HOST','SMTP_USER','SMTP_PASSWORD'], ['LICENSED_MUSIC_API_KEY','LICENSED_MUSIC_BASE_URL'], ['LICENSED_ANIME_API_KEY','LICENSED_ANIME_BASE_URL'], ['PAYMENT_PROVIDER','PAYMENT_SECRET_KEY','PAYMENT_WEBHOOK_SECRET'], ['STORAGE_ENDPOINT','STORAGE_ACCESS_KEY','STORAGE_SECRET_KEY','STORAGE_BUCKET'] ] as const;
   for (const group of groups) {
     if (group.some(key => Boolean(config[key])) && !group.every(key => Boolean(config[key]))) context.addIssue({ code: 'custom', path: [group[0]], message: `Configure all of ${group.join(', ')} or leave all empty` });
   }
+  if (config.EMAIL_PROVIDER === 'smtp' && !config.SMTP_HOST) context.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'EMAIL_PROVIDER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASSWORD' });
+  if (config.REDIS_URL && !/^rediss?:\/\//.test(config.REDIS_URL)) context.addIssue({ code: 'custom', path: ['REDIS_URL'], message: 'REDIS_URL must use the redis:// or rediss:// scheme (reserved; no Redis adapter is wired yet)' });
   if (config.PAYMENT_PROVIDER && config.PAYMENT_PROVIDER !== 'stripe') context.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'Only the implemented stripe adapter is supported' });
   if (config.NODE_ENV === 'production' && !config.MONGODB_URI.startsWith('mongodb+srv://')) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: 'Production requires Atlas mongodb+srv TLS URI' });
 });
