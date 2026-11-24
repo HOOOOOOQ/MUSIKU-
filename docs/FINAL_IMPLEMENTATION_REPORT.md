@@ -170,10 +170,10 @@ Setup instructions: `docs/GITHUB_ACTIONS_SETUP.md`, `docs/GOOGLE_OAUTH_SETUP.md`
 ## 7. Remaining gaps (not fixed by credentials)
 
 - Licensed music/anime adapters and stream entitlement/DRM resolution are absent; downloads are record-keeping only (no transfer worker, offline entitlement/expiry engine or Flutter download manager).
-- Payments cover one-time premium access; no subscription auto-renewal, refunds, chargebacks, tax or reconciliation.
+- Payments cover one-time premium access; no subscription auto-renewal, refunds, chargebacks, tax or reconciliation. The Flutter premium screen opens the provider-hosted checkout URL and reports an explicit error when the backend has no payment credentials, rather than pretending a purchase succeeded.
 - Email delivery is synchronous with no durable outbox: a delivery failure can leave an account registered until `/resend-verification` is used. No hosted App Links/email deep-link handler.
 - Provider rate budgets and cache are per-process; no Redis-backed distributed enforcement (`REDIS_URL` is reserved and unused).
-- Several Flutter management surfaces remain partial (playlist reorder/share UI, notification read/delete controls, premium checkout UI, synced lyric highlighting, complete preferences).
+- Several Flutter management surfaces remain partial (playlist reorder/share UI, synced lyric highlighting, cross-device queue synchronization, offline download manager). Premium checkout and notification management are implemented, but checkout cannot complete without a configured payment provider, and no real purchase has been made.
 - Admin dashboard stores access tokens in `localStorage`; needs hardened session/CSP review. Dashboard tests are not browser E2E.
 - No Android instrumentation/emulator tests, no load/performance testing, no production observability dashboards.
 - The replay-protection design means a Google token can be exchanged only once: after a lost network response the user must obtain a fresh token (documented, intentional, but a UX constraint).

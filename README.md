@@ -8,7 +8,7 @@ Flutter + Express/TypeScript + MongoDB Atlas + Next.js music/anime application.
 
 - `backend/`: Express REST API, Mongoose models, authentication, provider adapters, catalog, library/history, administration, tests.
 - `admin/`: Next.js dashboard consuming the same API; no database connection in browser code.
-- `mobile/`: Material 3/Riverpod/GoRouter client with Dio, secure token storage, just_audio/audio_service, video_player, and Android configuration.
+- `mobile/`: Material 3/Riverpod/GoRouter client with Dio, secure token storage, Google Sign-In, just_audio/audio_service, video_player, premium checkout, notification management, account security (sessions/devices/login history/deletion), and Android configuration pinned to AGP 9.3.1 / Gradle 9.5.0 / Kotlin 2.4.20.
 - `.github/workflows/verify.yml`: backend build/tests + admin tests/build on Node 22. Executed on GitHub: [success](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616814).
 - `.github/workflows/android-build.yml`: Java 17 + Flutter stable; `pub get`, `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, debug APK, artifact `musiku-plus-debug-apk`; optional signed release (`musiku-plus-release-apk`) only when all four `ANDROID_*` signing secrets exist on a non-PR event, with secure decode/cleanup and failure diagnostics. Executed on GitHub: [success (debug only)](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795).
 - `scripts/configure_signing.py`: CI-only keystore decode and escaped `key.properties` generation; never prints secret values.

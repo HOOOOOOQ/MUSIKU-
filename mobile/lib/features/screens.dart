@@ -774,10 +774,13 @@ class ProfileScreen extends ConsumerWidget {
             }
           },
         ),
+        ListTile(
+          title: const Text('Premium & pembayaran'),
+          onTap: () => context.push('/premium'),
+        ),
         for (final e in [
           ('Perangkat', '/users/devices'),
-          ('Premium', '/premium/plans'),
-          ('Pembayaran', '/premium/payments'),
+          ('Riwayat pencarian', '/search/history'),
           ('Provider status', '/providers/status'),
         ])
           ListTile(

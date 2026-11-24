@@ -7,6 +7,8 @@ import 'package:audio_service/audio_service.dart';
 import 'core/api.dart';
 import 'features/auth_action.dart';
 import 'features/account_security.dart';
+import 'features/notifications.dart';
+import 'features/premium.dart';
 import 'core/audio.dart';
 import 'features/screens.dart';
 
