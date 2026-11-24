@@ -34,7 +34,7 @@ export function createApp(): Application {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: [env.CLIENT_URL, env.ADMIN_URL], credentials: true }));
-  app.post('/api/premium/webhook', express.raw({ type: 'application/json', limit: '1mb' }), asyncHandler(async (req, res) => {
+  app.post('/api/premium/webhook', rateLimit({ windowMs: 60000, max: 120 }), express.raw({ type: 'application/json', limit: '1mb' }), asyncHandler(async (req, res) => {
     if (!hasPayments) { fail(res, 501, 'INTEGRATION_NOT_CONFIGURED', 'Stripe webhook not configured'); return; }
     await processStripeWebhook(req.body as Buffer, req.get('stripe-signature') ?? '');
     res.json({ received: true });

@@ -25,6 +25,14 @@ Future<void> main() async {
 
 final router = GoRouter(
   initialLocation: '/splash',
+  redirect: (context, state) async {
+    const publicRoutes = ['/splash', '/onboarding', '/login', '/auth-action'];
+    if (publicRoutes.contains(state.uri.path)) {
+      return null;
+    }
+    final token = await Api().storage.read(key: 'accessToken');
+    return token == null ? '/login' : null;
+  },
   routes: [
     GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),

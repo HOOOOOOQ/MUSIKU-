@@ -1,3 +1,4 @@
+import { auditService } from './auditService';
 import { googleIdentity } from './googleIdentity';
 import { deliverActionEmail } from './emailService';
 import crypto from 'crypto';
@@ -64,6 +65,7 @@ export const authService = {
 
     await deliverActionEmail(email, 'verify-email', verifyToken);
     const tokens = await issueTokens(String(user._id), user.role);
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
@@ -93,6 +95,7 @@ export const authService = {
     }
 
     const tokens = await issueTokens(String(user._id), user.role, meta.deviceId ?? '', meta.ip ?? '', meta.userAgent ?? '');
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
@@ -131,6 +134,7 @@ export const authService = {
     await LoginHistory.create({ user: user._id, success: true, method: 'google', ip: meta.ip ?? '', userAgent: meta.userAgent ?? '' });
     if (meta.deviceId) await UserDevice.findOneAndUpdate({ user: user._id, deviceId: meta.deviceId }, { $set: { platform: 'android', lastSeenAt: new Date() } }, { upsert: true, new: true });
     const tokens = await issueTokens(String(user._id), user.role, meta.deviceId ?? '', meta.ip ?? '', meta.userAgent ?? '');
+    await auditService.log(String(user._id), 'auth.session.issued', 'User', String(user._id));
     return { user: sanitizeUser(user), tokens };
   },
 
@@ -185,6 +189,7 @@ export const authService = {
     record.usedAt = new Date();
     await record.save();
     await UserSession.updateMany({ user: user._id }, { $set: { revokedAt: new Date() } });
+    await auditService.log(String(user._id), 'auth.password.reset', 'User', String(user._id));
   },
 
   async resendVerification(userId: string): Promise<void> {
@@ -218,6 +223,7 @@ export const authService = {
   },
 
   async deleteAccount(userId: string): Promise<void> {
+    await auditService.log(userId, 'auth.account.delete', 'User', userId);
     const user = await User.findById(userId);
     if (!user) throw notFound('User not found');
     user.status = 'deleted';
