@@ -1,7 +1,7 @@
 # OAuth + CI/CD verification report — MUSIKU+
 
 **Date:** 2026-11-24 (UTC) · **Branch:** `arena/47dd4ee9-musiku` · **PR:** [#2](https://github.com/HOOOOOOQ/MUSIKU-/pull/2)
-**Evidence commit:** `2d97b79` (Verify run **45362942971**, Android run **45362943525**) — the same result was observed on the three preceding green pairs (`5037fdd` 45362942971/45362943525, `b499117` 45357744692/45357744794, `58a6f42` 45360398512/45360398393)
+**Evidence commit:** `2d97b79` (Verify run **45362942971**, Android run **45362943525**) — the same result was observed on the four preceding green pairs (`0ec103b` 45361742621/45361742479, `58a6f42` 45360398512/45360398393, `5037fdd` 45359147433/45359147408, `b499117` 45357744692/45357744794)
 
 Every commit since the secrets were wired in has produced a green pair of runs; the four most recent are listed above, and `gh pr checks 2` reports all five checks passing.
 
