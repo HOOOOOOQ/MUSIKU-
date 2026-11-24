@@ -4,11 +4,57 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+# Backend verification gate: configuration audit (presence only), hermetic
+# backend tests, the live MongoDB Atlas integration suite, and the admin app.
+# Secrets are injected per step and only into the job that needs them:
+# MONGODB_URI / JWT_SECRET / JWT_REFRESH_SECRET never reach the admin job, and
+# none of them is ever passed to a Flutter build (see android-build.yml).
 jobs:
-  backend:
+  config-audit:
+    name: Configuration audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      atlas_ready: ${{ steps.audit.outputs.atlas_ready }}
+      google_ready: ${{ steps.audit.outputs.google_ready }}
+      android_google_ready: ${{ steps.audit.outputs.android_google_ready }}
+      jwt_ready: ${{ steps.audit.outputs.jwt_ready }}
+      signing_ready: ${{ steps.audit.outputs.signing_ready }}
+      api_base_url_ready: ${{ steps.audit.outputs.api_base_url_ready }}
+      all_required_ready: ${{ steps.audit.outputs.all_required_ready }}
+    steps:
+      - uses: actions/checkout@v5
+      # Reports presence and shape only; no value is echoed, stored or uploaded.
+      - name: Verify required configuration is present (values are never printed)
+        id: audit
+        env:
+          STRICT: ${{ github.event_name != 'pull_request' }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_WEB_CLIENT_ID_VAR: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          API_BASE_URL: ${{ vars.API_BASE_URL || vars.API_URL }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GITHUB_BUILD_TOKEN: ${{ secrets.GITHUB_BUILD_TOKEN }}
+        run: python3 scripts/audit_ci_config.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -19,11 +65,58 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
-  admin:
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript build
+        run: npm run build
+      - name: Unit and API tests (hermetic, fake persistence)
+        run: npm test
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+  atlas-integration:
+    name: MongoDB Atlas integration
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      # MONGODB_URI and the JWT signing keys reach this job only. The suite uses
+      # the isolated database named below and deletes everything it creates.
+      - name: Atlas pre-flight and integration suite
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          MONGODB_TEST_DB_NAME: musiku_plus_ci_test
+          ATLAS_PROBE_TIMEOUT_MS: 15000
+        run: |
+          set +e
+          npm run test:atlas:integration 2>&1 | tee ci-atlas.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" != 0 ]]; then
+            python3 ../scripts/ci_notice.py ci-atlas.log 'Atlas integration' 'FAILURE'
+          fi
+          exit "$status"
+      # Publishes the honest outcome (live run vs. skipped, with the recorded
+      # reason) as an annotation and job summary — counts only, never values.
+      - name: Report Atlas outcome
+        if: always()
+        run: python3 ../scripts/report_atlas_outcome.py ci-atlas.log tests/atlas/preflight.json
+
+  admin:
+    name: Admin build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: admin
@@ -34,6 +127,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: admin/package-lock.json
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
