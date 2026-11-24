@@ -169,7 +169,7 @@ Android run **45359147408**, job `Android debug APK`:
 | 5 Resolve packages (`flutter pub get`) | success | — |
 | 6 Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success | — |
 | 7 Analyze (`flutter analyze`) | success | `[notice] Flutter analyzer :: No issues found! (ran in 6.6s)` |
-| 8 Test (`flutter test`) | success | `[notice] Flutter tests :: … | test files: 9` — 25 test declarations across those 9 files; the summary is parsed by `scripts/report_flutter_tests.py`, which strips ANSI escapes and carriage returns before reading Flutter's counter |
+| 8 Test (`flutter test`) | success | `[notice] Flutter tests :: … | test files: 9 | declared tests: 25`. On the GitHub runner Flutter's reporter output is buffered so its `+N` progress counter never reaches the log; `scripts/report_flutter_tests.py` therefore also counts `test()`/`testWidgets()` declarations (25 across 9 files) and reports the summary text when present, rather than inventing a number |
 
 New in this round: `mobile/test/build_config_test.dart` (7 tests) covering `API_BASE_URL` precedence, the legacy `API_URL` alias, trailing-slash normalisation, whitespace handling, the deliberately non-functional `example.invalid` fallback, injectable base URL, and the assertion that no OAuth client secret or database credential is read at build time.
 

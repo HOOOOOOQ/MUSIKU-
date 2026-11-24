@@ -48,15 +48,30 @@ def main() -> int:
     skipped = max((int(m.group(1)) for line in lines for m in [re.search(r"~(\d+)", line)] if m), default=0)
     files = sorted(p.name for p in test_dir.glob("*_test.dart")) if test_dir.is_dir() else []
 
+    # Deterministic fallback: count the declarations in the test sources, so the
+    # annotation stays useful even when Flutter's reporter output is buffered in a
+    # way that hides its progress counters (as on the GitHub runner).
+    declared = 0
+    if test_dir.is_dir():
+        declaration_re = re.compile(r"^\s*(?:test|testWidgets)\(", re.MULTILINE)
+        for source in sorted(test_dir.glob("*_test.dart")):
+            declared += len(declaration_re.findall(source.read_text(errors="replace")))
+
     verdict = "FAIL" if (failed and not all_passed) else "PASS"
     if all_passed and passed:
         status = f"{verdict} — +{passed}" + (f" ~{skipped}" if skipped else "") + ": All tests passed!"
+    elif all_passed:
+        status = f"{verdict} — All tests passed! (reporter counter not captured in the log)"
     elif passed:
-        status = f"{verdict} — +{passed} tests reported" + ("" if all_passed else " (summary line not captured)")
+        status = f"{verdict} — +{passed} tests reported (summary line not captured)"
     else:
-        status = f"{verdict} — see log (no test counter captured)"
+        status = f"{verdict} — step exited 0 (reporter summary not captured in the log)"
 
-    print(f"::notice title=Flutter tests::{status} | test files: {len(files)}" + (f" ({', '.join(files)})" if files and len(files) <= 12 else ""))
+    print(
+        f"::notice title=Flutter tests::{status} | test files: {len(files)}"
+        f" | declared tests: {declared}"
+        + (f" ({', '.join(files)})" if files and len(files) <= 12 else "")
+    )
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
@@ -66,6 +81,7 @@ def main() -> int:
             handle.write(f"- Passing test counter: {passed}\n")
             handle.write(f"- Skipped: {skipped}\n")
             handle.write(f"- Test files ({len(files)}): {', '.join(files) or 'none found'}\n")
+            handle.write(f"- Declared `test()`/`testWidgets()` calls in those files: {declared}\n")
 
     return 1 if (failed and not all_passed) else 0
 
