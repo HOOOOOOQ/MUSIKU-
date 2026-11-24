@@ -2,14 +2,16 @@
 
 Flutter + Express/TypeScript + MongoDB Atlas + Next.js music/anime application.
 
-**Acceptance status: incomplete, not production-ready.** The repository contains executable backend/admin code and a Flutter client implementation, but does not yet satisfy the entire full-product specification. No APK has been produced. See [verification and gaps](docs/VERIFICATION.md) before deploying. Missing implementation is distinguished from missing credentials there.
+**Acceptance status: incomplete, not production-ready.** Both CI workflows pass on GitHub runners and a real **debug APK artifact** (`musiku-plus-debug-apk`, 84,293,175 bytes) was produced by [`android-build.yml`](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795); backend (137 tests / 14 suites), admin (3 tests + production build), `flutter analyze` (no issues) and `flutter test` all pass. **Release signing is not configured**, and MongoDB Atlas, Google OAuth, SMTP, Stripe and licensed media remain **unverified because no owner credentials exist**. Read [FINAL_IMPLEMENTATION_REPORT.md](docs/FINAL_IMPLEMENTATION_REPORT.md) for what is verified versus pending, and [VERIFICATION.md](docs/VERIFICATION.md) for gaps that credentials alone will not fix.
 
 ## Repository
 
 - `backend/`: Express REST API, Mongoose models, authentication, provider adapters, catalog, library/history, administration, tests.
 - `admin/`: Next.js dashboard consuming the same API; no database connection in browser code.
 - `mobile/`: Material 3/Riverpod/GoRouter client with Dio, secure token storage, just_audio/audio_service, video_player, and Android configuration.
-- `.github/workflows/verify.yml`: backend/admin verification plus Flutter analysis/tests/debug APK job. Workflow exists but has not been run in GitHub in this session.
+- `.github/workflows/verify.yml`: backend build/tests + admin tests/build on Node 22. Executed on GitHub: [success](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616814).
+- `.github/workflows/android-build.yml`: Java 17 + Flutter stable; `pub get`, `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, debug APK, artifact `musiku-plus-debug-apk`; optional signed release (`musiku-plus-release-apk`) only when all four `ANDROID_*` signing secrets exist on a non-PR event, with secure decode/cleanup and failure diagnostics. Executed on GitHub: [success (debug only)](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795).
+- `scripts/configure_signing.py`: CI-only keystore decode and escaped `key.properties` generation; never prints secret values.
 
 ## Backend
 
@@ -73,10 +75,10 @@ The Android Gradle wrapper is included. For a signed release, create local `mobi
 flutter build apk --release --dart-define=API_URL=https://YOUR_API_HOST/api
 ```
 
-Keystores/signing properties are ignored by Git. Expected output paths after a successful real build are `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`; **neither currently exists**.
+Keystores/signing properties are ignored by Git. Build outputs are `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`. `app-debug.apk` currently exists **only as a GitHub Actions artifact** from run 45340616795 (this sandbox cannot build it locally); no signed `app-release.apk` exists because the four signing secrets are not configured. The Android toolchain is pinned to AGP 9.3.1 / Gradle 9.5.0 / Kotlin 2.4.20 to satisfy Flutter stable's minimums.
 
 ## Media and commercial integrations
 
-Deezer/iTunes adapters expose public metadata/preview URLs; MusicBrainz metadata, LRCLIB lyrics, AniList/Jikan metadata adapters are included. These integrations were tested against controlled HTTP responses, not live providers in this restricted environment. Public availability does not itself grant commercial redistribution rights.
+Deezer/iTunes adapters expose public metadata/preview URLs; MusicBrainz metadata, LRCLIB lyrics, AniList/Jikan metadata adapters are included. These integrations were tested against controlled HTTP responses, not live providers in this restricted environment. Public availability does not itself grant commercial redistribution rights. See [PROVIDER_CONFIGURATION.md](docs/PROVIDER_CONFIGURATION.md) for every provider, its variables and its honest readiness state.
 
 Full-track music, anime video, offline licensing, payment processing, email delivery and Google sign-in require provider agreements/configuration and in some cases additional concrete adapters, not merely an API key. No DRM bypass or unauthorized video source is implemented. See the exact gaps in [VERIFICATION.md](docs/VERIFICATION.md).

@@ -19,8 +19,9 @@ The Atlas probe writes a uniquely tagged document to `_integration_probes`, read
 - Deploy backend as a long-running Node 22 service with network access to Atlas and approved provider endpoints. Health endpoint `/health` is process liveness, not proof of database availability. Admin dashboard's database health invokes a DB ping.
 - Deploy `admin/` with `BACKEND_URL` pointing to the backend origin; `/api/:path*` proxies requests server-side. `NEXT_PUBLIC_API_URL` should normally be empty. Only deliberately public configuration belongs in `NEXT_PUBLIC_*` variables.
 - Deploy with HTTPS and a restrictive proxy policy. Never cache authenticated/private API responses in public CDNs.
-- Build mobile with the reachable HTTPS API origin ending in `/api` through `--dart-define=API_URL=...`.
-- `REDIS_URL` is reserved configuration; current provider cache uses MongoDB/memory, not an active Redis adapter.
+- Build mobile with the reachable HTTPS API origin ending in `/api` through `--dart-define=API_URL=...`, or set the `API_URL` GitHub repository variable so CI artifacts embed it. Artifacts built without that variable use the nonfunctional `https://api.example.invalid/api` default and cannot reach a backend. `GOOGLE_WEB_CLIENT_ID` (public web client ID) must also be provided at build time for the Google button to appear.
+- `REDIS_URL` is reserved configuration; current provider cache uses bounded in-process memory, not an active Redis adapter, so provider rate budgets are per-instance only. Run multiple backend instances behind a load balancer only after adding distributed enforcement.
+- Optional backend-only `GITHUB_BUILD_TOKEN` (fine-grained, Actions read, this repository) lets the admin integration page show sanitized Android workflow status for `main`; it is never returned to the browser and public repositories can omit it.
 
 ## Licensed media
 
@@ -37,4 +38,6 @@ keyAlias=
 keyPassword=
 ```
 
-Do not fill secrets in documentation or commit a real signing properties file. Debug APKs are for testing only. The current CI creates only a debug APK; release publication is not configured.
+Do not fill secrets in documentation or commit a real signing properties file. Debug APKs are for testing only.
+
+In CI, add the four repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) via GitHub Settings; `scripts/configure_signing.py` decodes the keystore into `$RUNNER_TEMP` with `0600` permissions, writes an escaped `mobile/android/key.properties`, and both files are deleted on success and failure. Release builds run only on non-PR events with all four secrets present and upload exactly `musiku-plus-release-apk`; the keystore is never an artifact and passwords are never printed. **Today no signing secrets are configured, so CI produces only the debug artifact** (`musiku-plus-debug-apk`, run 45340616795) and release publication is not configured. Without `storeFile`, `build.gradle.kts` falls back to the debug signing config so a local release build remains reproducible but obviously non-distributable.

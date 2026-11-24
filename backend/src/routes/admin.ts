@@ -1,4 +1,3 @@
-import { githubBuildStatus } from '../services/githubBuildStatus';
 import { integrationStatus } from '../services/integrationStatus';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -185,5 +184,5 @@ adminRouter.get('/integration-status', asyncHandler(async (_req, res) => {
     UserSession.countDocuments({ revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } }),
     LoginHistory.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 86400000) } } }, { $group: { _id: { method: '$method', success: '$success' }, count: { $sum: 1 } } }]),
   ]);
-  ok(res, { integrations: { ...integrationStatus(), githubBuild: await githubBuildStatus() }, database, authentication: { emailUsers, googleUsers, activeSessions: sessions, recentLogins } });
+  ok(res, { integrations: await integrationStatus(), database, authentication: { emailUsers, googleUsers, activeSessions: sessions, recentLogins } });
 }));

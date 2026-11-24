@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { env } from '../../src/config/env';
 import { processStripeWebhook, stripeClient } from '../../src/services/stripePayments';
-beforeEach(()=> {env.PAYMENT_PROVIDER='stripe';env.PAYMENT_SECRET_KEY='sk_test_unit_only';env.PAYMENT_WEBHOOK_SECRET='unit-test-signing-secret';});
+beforeEach(()=> {env.PAYMENT_PROVIDER='stripe';env.PAYMENT_SECRET_KEY='unit-only-payment-key';env.PAYMENT_WEBHOOK_SECRET='unit-test-signing-secret';});
 test('refuses absent gateway credentials',()=>{env.PAYMENT_SECRET_KEY='';expect(()=>stripeClient()).toThrow('not configured');});
 test('rejects invalid webhook signature before persistence',async()=>{await expect(processStripeWebhook(Buffer.from('{}'),'forged')).rejects.toThrow('Invalid payment signature');});
 test('valid signature for ignored event is acknowledged without DB access',async()=>{

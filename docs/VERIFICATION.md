@@ -1,61 +1,80 @@
 # Verification and acceptance report
 
-Date: 2026-11-24. This is a record of actual execution, not an assertion that all acceptance criteria are met.
+Date: 2026-11-24 · Branch `arena/47dd4ee9-musiku` · Verified code commit `6cd1b30` · Companion narrative: [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md).
+
+This is a record of actual execution. It is **not** an assertion that all acceptance criteria are met.
 
 ## Executed
 
 | Check | Result | Limits |
 |---|---|---|
-| Backend `npm run build` | PASS | TypeScript compilation only |
-| Backend `npm test` | PASS, 9 suites, 116 tests | Unit tests plus Supertest/auth flows with in-memory model fakes; no real Atlas persistence |
-| Mongoose schema contracts | PASS, included above | Checks all exported model timestamps/collection declarations, identity indexes, validation and TTL declarations; not server-side index creation |
-| Security regression tests | PASS, included above | JWT/auth boundaries, admin provider alias, pagination validation, unsigned webhook rejection; not a penetration test |
-| Admin `npm test` | PASS, 3 tests | API client envelope/auth/error tests, not browser E2E or complete dashboard tests |
-| Admin `npm run build` | PASS | Next.js 15.5.29 production compilation and prerender of 11 routes |
-| Runtime dependency audit | PASS, backend/admin each report 0 vulnerabilities | `npm audit --omit=dev --audit-level=high`; not a code security audit |
-| `npm run test:atlas` | BLOCKED | Startup validation correctly rejected absent MONGODB_URI/JWT secrets |
-| `flutter analyze` | NOT RUN | Attempt returned `flutter: command not found` |
-| `flutter test` | NOT RUN | Attempt returned `flutter: command not found` |
-| `flutter build apk --debug` | FAILED TO START | Flutter missing; no APK |
-| `flutter build apk --release` | FAILED TO START | Flutter missing; signing configuration also absent |
+| CI `android-build.yml` run [45340616795](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795) | **SUCCESS** | `pull_request` event; debug only |
+| ↳ `dart format --set-exit-if-changed lib test` | PASS | formatting only |
+| ↳ `flutter analyze` | PASS — "No issues found! (ran in 6.6s)" | static analysis, not runtime |
+| ↳ `flutter test` | PASS — 10 tests | widget/unit tests with fakes; no device, no Play services |
+| ↳ `flutter build apk --debug` + artifact upload | PASS — `musiku-plus-debug-apk`, 84,293,175 bytes | debug-signed; embeds placeholder `API_URL` because the repository variable is unset |
+| ↳ Release signing check / release build / release artifact | SKIPPED — `ready=false` | four signing secrets absent and PR event; **no signed release APK exists** |
+| CI `verify.yml` run [45340616814](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616814) | **SUCCESS** | backend `npm ci`/build/test + admin `npm ci`/test/build on Node 22 |
+| Backend `npm run build` (local) | PASS | TypeScript compilation |
+| Backend `npm test` (local) | PASS — **14 suites, 137 tests** | unit + Supertest flows against in-memory model fakes and a mocked Google verifier; no real Atlas, no real Google/SMTP/Stripe |
+| Mongoose schema/index/TTL contract tests | PASS (included above) | declarations, not server-side index creation |
+| Stripe webhook signature tests | PASS (included above) | signature math against fake bodies; no live charge |
+| SMTP transport test | PASS (included above) | mocked transporter; no message was delivered |
+| GitHub build-status sanitizer test | PASS (included above) | mocked `fetch`; no private-repo token |
+| Admin `npm test` (local + CI) | PASS — 3 tests | API client envelope/auth/error; not browser E2E |
+| Admin `npm run build` (local + CI) | PASS | Next.js production build of 9 dashboard routes |
+| `npm audit --omit=dev --audit-level=high` (backend) | PASS — 0 vulnerabilities | dependency advisories only, not a code security audit |
+| Tracked-file credential scan | PASS — no private keys, live secret keys, Atlas URIs with passwords, Google API keys, GitHub PATs or Slack tokens | one obvious unit-test placeholder was renamed to `unit-only-payment-key` |
+| Backend `npm run test:atlas` | **BLOCKED** | startup validation rejected absent `MONGODB_URI`/`JWT_SECRET`/`JWT_REFRESH_SECRET`; no real Atlas test has run |
+| Local `flutter analyze` / `flutter test` / `flutter build apk` | **NOT RUN** | no Flutter/Dart/Java/Android SDK in this sandbox; pub.dev, dl.google.com, services.gradle.org and repo.maven.apache.org are outside the network allowlist. GitHub Actions is the authoritative Flutter execution. |
 
-Java/Dart/Flutter/Android SDK are absent here. SDK/package/distribution hosts needed by Flutter/Android are outside this environment's network allowlist. Adding source files or a CI workflow does not resolve this execution limit. The CI workflow has not been executed or observed passing.
+## CI history (real failures, real fixes)
 
-## Implemented source, not yet end-to-end verified
+| Run | Outcome | Cause and fix |
+|---|---|---|
+| 45338327587 | failed at format | Dart sources reformatted with a `dart_style`-compatible formatter |
+| 45338551153 | failed at analyze | `material.dart` export deprecation notices + multiline `if` braces; compatibility ignores and braces added |
+| 45338810110 | failed at analyze | `VideoPlayerController.seek` does not exist → `seekTo`; remaining brace infos fixed |
+| 45339330114 | failed at debug build | Android toolchain below Flutter stable minimums → AGP 9.3.1, Gradle 9.5.0, KGP 2.4.20, `minSdk = flutter.minSdkVersion`, Kotlin `compilerOptions` JVM 17 |
+| 45339850020 | failed at debug build | Kotlin DSL `Unresolved reference 'util'`: the `java` extension shadowed `java.util` → top-level `import java.util.Properties`, hardened signing detection |
+| 45340616795 | **success** | debug APK artifact uploaded |
 
-- Modular Express REST endpoints for auth, users, catalog, playlists, library, history, search, providers, notifications, premium records, download records, administration.
-- Mongoose domain models and explicit required collection names, timestamps, query indexes and TTL declarations; Atlas connection/pooling/index bootstrap and a real connection probe script.
-- Password hashing, JWT issuance/refresh rotation, secure provider-secret encryption, validation, headers, CORS, rate limits, API error envelopes, audit log service.
-- Public metadata/preview/lyrics adapters with fallback/cache orchestration; provider manager and health/log endpoints.
-- Admin login, dashboard statistics/charts, user management, provider management with write-only key fields, catalog listing, plan listing, settings/flags editing, logs.
-- Flutter splash/onboarding, registration/login/password-reset request, discovery/search, catalog detail, likes/watchlist/favorites actions, playlist creation/add action, library/history lists, profile editing, secure tokens and single-flight refresh/retry.
-- Flutter official-preview audio playback and Android background-media service wiring. Video player URL resolution, scrubbing, caption loading (SRT/WebVTT), speed selection, periodic history checkpoints and resume attempt are implemented but not device-tested.
-- Image caching and server-side provider caching. These are not a complete offline media/download system.
+Runs 45339134473, 45339249111 and 45340564428 were superseded by the workflow concurrency group when newer commits were pushed (`gh run cancel` returned `403 Resource not accessible by integration`).
+
+## Implemented source, not end-to-end verified
+
+- Auth: register/login, Google ID-token verification (`google-auth-library` signature/audience/issuer/expiry/`sub`/verified email), verified-email linking with unique sparse `googleId`, one-time replay hashes with TTL, refresh rotation with single-winner concurrency, session-bound access JWTs (`sid`+`jti`) so logout/device/session/password revocation invalidates tokens immediately, forgot/reset/verify with atomic single-use consumption, resend verification, account deletion, login history, connected devices, rate limiting.
+- Identity extensibility: Flutter `IdentityProvider` abstraction with only Google implemented; no Apple button is rendered; no nonfunctional provider UI.
+- Email: nodemailer SMTP with STARTTLS enforcement, production fail-closed `503` when unconfigured, no-op in dev/test.
+- Payments: official Stripe SDK, one-time premium Checkout with idempotency key, raw-body webhook signature verification, amount/currency/metadata validation, idempotent activation inside a MongoDB transaction.
+- Providers: Deezer, iTunes, MusicBrainz, LRCLIB, AniList, Jikan adapters; enable/disable, priority, timeout, retry/backoff, bounded cache, health checks, fallback, logging; `AsyncLocalStorage` request context propagating timeout/retry budgets; grouped startup configuration validation.
+- Admin: login, dashboard statistics, users, provider management with write-only credentials, catalog, plans, settings/feature flags, logs, audit logs, integration status (OAuth/DB/auth stats/sanitized GitHub build status).
+- Flutter: splash/onboarding, register/login/reset/verify token entry, Google sign-in (when configured), discovery/search/detail, likes/watchlist/favorites, playlists, library/history, profile, account security (sessions/devices/login history, revoke-all, delete account), secure token storage, single-flight refresh + retry, audio playback with background media service, video player with subtitle selection/speed/history checkpoints.
 
 ## Missing credentials / external dependencies
 
-- Actual Atlas deployment URI, least-privilege database account, network access list. No live schema/index/transaction/synchronization test has been performed.
-- Licensed full-track audio and licensed anime video agreements, provider API documentation, keys, content ID mapping, region/license enforcement and DRM requirements.
-- Google OAuth application configuration and Android client setup.
-- Payment account, signing secret and provider-specific protocol.
-- Email delivery account and verified sender.
-- Authorized object-storage account and media distribution permissions.
-- Release signing keystore and passwords (must remain outside Git).
+- Real Atlas deployment URI + least-privilege user + network access list. No live schema/index/transaction/TTL test has been performed.
+- Google Cloud OAuth clients (Web + Android with actual SHA-1) and `GOOGLE_WEB_CLIENT_ID` repository variable.
+- SMTP account and verified sender.
+- Stripe account keys plus a registered webhook endpoint.
+- Licensed full-track audio and anime video/subtitle agreements, documentation, keys, content-ID mapping, territorial/DRM requirements.
+- Authorized object storage for licensed media.
+- The four Android release signing secrets (must stay outside Git and outside chat).
+- `API_URL` repository variable pointing at a deployed backend, so APK artifacts are usable.
 
-## Known implementation gaps — not solved by adding credentials alone
+## Known implementation gaps — credentials alone do not fix these
 
-The strict full-product acceptance criteria are **not yet met**. In particular:
+The strict full-product acceptance criteria are **not met**. In particular:
 
-- Licensed music/anime provider files are extension slots returning empty/null data after configuration checks, not working concrete commercial adapters. Stream routes do not implement provider entitlement/DRM/session resolution. Do not enable them and assume production playback works.
-- Payment checkout does not call a real payment SDK/API. It fails closed instead of issuing a fake checkout URL. Webhook deliberately returns 501 until cryptographic signature verification and idempotent transactional activation are implemented. Subscription status/cancel/history code exists; actual charging and renewal do not.
-- Email verification/password reset tokens exist, but production email delivery is not wired. Google backend token validation exists; mobile Google sign-in UI/SDK is not wired.
-- Downloads API tracks records only. No licensed file-transfer worker, offline entitlement/expiry manager, protected media cache, resume/cancel transfer engine or complete Flutter download manager exists.
-- Flutter library/resource views are not complete management interfaces: playlist editing/reordering/sharing, artist/album interactions, watchlist updates/removal, notification read/delete controls, account deletion UI, complete preferences, premium checkout UI, synchronized queue/repeat/shuffle and synced lyric highlighting remain incomplete.
-- Background audio/notification permissions, audio interruptions, media buttons, subtitle timing, video lifecycle and playback integrations require analysis and Android device tests. Mobile has not been compiled.
-- Admin catalog and episodes are read-only; subscription management and notification campaign/editor interfaces are incomplete. Dashboard tests do not cover UI E2E.
-- Provider manager needs production rate-budget enforcement, live contract tests and a complete credential/base-URL-driven adapter registry. Source/provider ID reconciliation across AniList/Jikan and other fallbacks needs further testing.
-- Multi-document transactions are not yet implemented for every atomic flow that needs them. Account bootstrap/deletion, playlists, premium activation and persistent notification delivery need production reliability/security review.
-- Access JWTs remain valid until expiry after some account changes; immediate suspension/session/device revocation needs server-side enforcement. Dashboard uses localStorage for access tokens and needs hardened session/CSP review before production.
-- Search categories beyond implemented song/artist/album/anime fan-out, full filter/pagination UI, robust offline state, accessibility audits, performance/load testing and production observability are incomplete.
+- Licensed music/anime adapters are extension slots returning empty data even when a key/base-URL pair is configured (`adapterReady: false` is reported truthfully). Stream routes do not implement provider entitlement, DRM or session resolution.
+- Payments are one-time premium access: no subscription auto-renewal, refunds, chargebacks, tax handling or reconciliation.
+- Email delivery is synchronous with no durable outbox; a failed send can leave an account registered until `/resend-verification` is used. Hosted App Links / email deep-link handling is absent — the mobile app offers a manual token screen.
+- Replay protection means a Google ID token can be exchanged exactly once; after a lost network response the user must obtain a fresh token. No raw token is stored.
+- Provider rate budgets and caches are per-process in-memory; there is no distributed enforcement (`REDIS_URL` is reserved and unused). Admin-configured provider `baseUrl` does not yet re-point the official-endpoint adapters dynamically.
+- Downloads are record-keeping only: no licensed transfer worker, offline entitlement/expiry manager, protected media cache, resume/cancel engine or complete Flutter download manager.
+- Flutter management surfaces remain partial: playlist reorder/share UI, notification read/delete controls, premium checkout UI, complete preferences, synchronized queue/repeat/shuffle, synced lyric highlighting.
+- Admin catalog/episodes are read-only; subscription management and notification campaign editors are incomplete; dashboard stores access tokens in `localStorage` and needs hardened session/CSP review.
+- No Android instrumentation/emulator tests, no load/performance testing, no production observability. Multi-document transactions are not used in every atomic flow that would benefit (they are used for payment activation and require an Atlas replica set).
+- Access JWTs without `sid` are accepted only when `NODE_ENV=test`, to keep legacy fixtures working; production requires session-bound tokens.
 
-These gaps are reported explicitly rather than disguising partial implementation as a finished full product.
+These gaps are reported explicitly rather than presenting partial implementation as a finished product. **MUSIKU+ must not be called production-ready** while Atlas, Google OAuth, SMTP, Stripe and release signing remain unverified.

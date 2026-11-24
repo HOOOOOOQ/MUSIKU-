@@ -45,6 +45,10 @@ Build outputs: `mobile/build/app/outputs/flutter-apk/`. Installation is permitte
 
 Only after a successful signed build and device testing: open **Releases → Draft a new release**, select an approved tag/commit, attach the verified release APK, include checksums/test results and publish according to repository policy. This workflow does not automatically publish releases or tags.
 
+## Current status (2026-11-24)
+
+The Android workflow has been executed on GitHub and passed: run [45340616795](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616795) produced artifact **musiku-plus-debug-apk** (84,293,175 bytes) with `flutter analyze` reporting "No issues found" and `flutter test` passing. Release steps were skipped because the four signing secrets are absent and the event was a pull request — **no signed release APK exists yet**. The `verify.yml` Node workflow passed on the same commit: run [45340616814](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45340616814). Neither `API_URL` nor `GOOGLE_WEB_CLIENT_ID` was configured, so that debug artifact embeds the nonfunctional default API origin and hides the Google button.
+
 ## Troubleshooting
 
 - **Format failure**: run `dart format lib test`, commit changes, rerun. CI checks do not silently rewrite source.
@@ -53,7 +57,10 @@ Only after a successful signed build and device testing: open **Releases → Dra
 - **Release skipped**: missing/partial signing secrets or PR event. Debug should still run.
 - **Keystore alias/password**: validate locally using keytool; do not echo secret values in CI.
 - **OAuth error**: verify package name, exact certificate SHA and Web audience; see GOOGLE_OAUTH_SETUP.md.
-- **Actions disabled/billing/approval**: repository owner must enable/approve Actions and provide runner capacity.
+- **Gradle `Script compilation errors` about AGP/Gradle/Kotlin versions**: Flutter stable enforces minimums (currently AGP 9.3.1, Gradle 9.5.0, Kotlin 2.4.20, Java 17). Keep `mobile/android/settings.gradle.kts`, `gradle/wrapper/gradle-wrapper.properties` and `app/build.gradle.kts` aligned; do not downgrade to silence the checker.
+- **`Unresolved reference 'util'` in `build.gradle.kts`**: the Gradle `java` extension shadows the `java.util` package in Kotlin DSL scripts. Add `import java.util.Properties` at the top of the script instead of writing `java.util.Properties()` inline.
+- **`VideoPlayerController.seek` undefined**: the video_player API is `seekTo(Duration)`; analyzer errors like this stop the build before Gradle runs, so fix source rather than relaxing analysis.
+- **Actions disabled/billing/approval**: repository owner must enable/approve Actions and provide runner capacity. Automation in this repository cannot read or write secrets/variables (`403 Resource not accessible by integration`) and cannot cancel runs; concurrency groups cancel superseded runs instead.
 - **API 403 for secrets/variables**: automation may lack administrative permission. Owner must configure via Settings; do not share secret values with the agent.
 
 The general `verify.yml` independently runs backend build/tests and admin tests/build. A green Node job is not proof that the Android workflow passed.
