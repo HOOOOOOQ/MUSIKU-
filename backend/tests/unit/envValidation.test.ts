@@ -1,4 +1,4 @@
-import { envSchema } from '../../src/config/env';
+import { envSchema, validateMongoUri } from '../../src/config/env';
 
 const base = {
   MONGODB_URI: 'mongodb+srv://user:pass@cluster.mongodb.net/musiku_plus',
@@ -42,5 +42,61 @@ describe('startup configuration validation', () => {
   it('requires an Atlas SRV URI in production', () => {
     expect(envSchema.safeParse({ ...base, NODE_ENV: 'production', MONGODB_URI: 'mongodb://localhost:27017/musiku' }).success).toBe(false);
     expect(envSchema.safeParse({ ...base, NODE_ENV: 'production' }).success).toBe(true);
+  });
+
+  it('rejects identical access and refresh signing keys', () => {
+    const result = envSchema.safeParse({ ...base, JWT_SECRET: 'same-key-16-characters', JWT_REFRESH_SECRET: 'same-key-16-characters' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unconfigured Google audience opt-in', () => {
+    expect(envSchema.safeParse({ ...base, GOOGLE_ACCEPT_ANDROID_AUDIENCE: 'true' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, GOOGLE_ACCEPT_ANDROID_AUDIENCE: 'true', GOOGLE_CLIENT_ID: 'android-client.apps.googleusercontent.com' }).success).toBe(true);
+  });
+
+  it('rejects template placeholder connection strings at startup', () => {
+    expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://USER:PASSWORD@cluster.mongodb.net/musiku_plus' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://user:pass@your-cluster.mongodb.net/musiku_plus' }).success).toBe(false);
+  });
+
+  it('rejects a structurally invalid connection string at startup', () => {
+    expect(envSchema.safeParse({ ...base, MONGODB_URI: 'postgres://user:pass@host/db' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, MONGODB_URI: 'mongodb+srv://user:pass@short/db' }).success).toBe(false);
+  });
+});
+
+describe('validateMongoUri', () => {
+  it('accepts a real Atlas SRV URI with options', () => {
+    expect(validateMongoUri('mongodb+srv://ci_user:pw@cluster0.ab1cd.mongodb.net/musiku_plus?retryWrites=true&w=majority', true)).toBeNull();
+  });
+
+  it('accepts a local development URI without credentials', () => {
+    expect(validateMongoUri('mongodb://localhost:27017/musiku_plus_test', false)).toBeNull();
+  });
+
+  it('requires credentials in production', () => {
+    expect(validateMongoUri('mongodb+srv://cluster0.ab1cd.mongodb.net/musiku_plus', true)).toMatch(/credentials/);
+  });
+
+  it('rejects the wrong scheme, a missing host and whitespace', () => {
+    expect(validateMongoUri('postgres://user:pass@cluster0.ab1cd.mongodb.net/db', false)).toMatch(/must start with/);
+    expect(validateMongoUri('mongodb+srv://', false)).toMatch(/host/);
+    expect(validateMongoUri('mongodb+srv://user:pa ss@cluster0.ab1cd.mongodb.net/db', false)).toMatch(/whitespace/);
+    expect(validateMongoUri('', false)).toMatch(/required/);
+  });
+
+  it('rejects an SRV URI whose host is not fully qualified', () => {
+    expect(validateMongoUri('mongodb+srv://user:pass@localhost/db', false)).toMatch(/fully qualified/);
+  });
+
+  it('flags unreplaced template text instead of connecting with it', () => {
+    expect(validateMongoUri('mongodb+srv://USER:PASSWORD@cluster0.ab1cd.mongodb.net/db', false)).toMatch(/placeholder/);
+  });
+
+  it('never echoes the URI back in an error message', () => {
+    const message = validateMongoUri('mongodb+srv://USER:PASSWORD@cluster0.ab1cd.mongodb.net/db', false) ?? '';
+    expect(message).not.toContain('USER:PASSWORD');
+    expect(message).not.toContain('mongodb+srv://');
   });
 });

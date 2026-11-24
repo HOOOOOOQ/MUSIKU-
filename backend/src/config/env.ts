@@ -76,8 +76,47 @@ export const envSchema = z.object({
   if (config.GOOGLE_CLIENT_SECRET && !config.GOOGLE_WEB_CLIENT_ID && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_CLIENT_SECRET'], message: 'GOOGLE_CLIENT_SECRET requires GOOGLE_WEB_CLIENT_ID (or GOOGLE_CLIENT_ID)' });
   if (config.GOOGLE_ACCEPT_ANDROID_AUDIENCE === 'true' && !config.GOOGLE_CLIENT_ID) context.addIssue({ code: 'custom', path: ['GOOGLE_ACCEPT_ANDROID_AUDIENCE'], message: 'GOOGLE_ACCEPT_ANDROID_AUDIENCE=true requires GOOGLE_CLIENT_ID' });
   if (config.JWT_SECRET === config.JWT_REFRESH_SECRET) context.addIssue({ code: 'custom', path: ['JWT_REFRESH_SECRET'], message: 'JWT_SECRET and JWT_REFRESH_SECRET must be different keys' });
+  const uriIssue = validateMongoUri(config.MONGODB_URI, config.NODE_ENV === 'production');
+  if (uriIssue) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: uriIssue });
   if (config.NODE_ENV === 'production' && !config.MONGODB_URI.startsWith('mongodb+srv://')) context.addIssue({ code: 'custom', path: ['MONGODB_URI'], message: 'Production requires Atlas mongodb+srv TLS URI' });
 });
+
+const URI_PLACEHOLDER_MARKERS = ['change-me', 'user:password', 'your-cluster', 'your_cluster', '<cluster>', '<password>', '<user>', 'example.invalid'];
+
+/**
+ * Startup validation of the MongoDB connection string.
+ *
+ * Returns `null` when the URI is acceptable, otherwise a human-readable reason.
+ * This deliberately checks structure only (scheme, host, credentials, obviously
+ * unreplaced template text) and never logs or returns the URI itself, so a
+ * malformed value fails fast at boot instead of hanging in server selection or
+ * leaking into a driver error message.
+ */
+export function validateMongoUri(uri: string, requireCredentials: boolean): string | null {
+  const value = (uri ?? '').trim();
+  if (!value) return 'MONGODB_URI is required';
+  if (/\s/.test(value)) return 'MONGODB_URI must not contain whitespace';
+  const match = /^(mongodb|mongodb\+srv):\/\/([^/?#]*)(.*)$/.exec(value);
+  if (!match) return 'MONGODB_URI must start with mongodb:// or mongodb+srv://';
+  const [, scheme, authority, rest] = match;
+  const hostPart = authority.includes('@') ? authority.slice(authority.lastIndexOf('@') + 1) : authority;
+  if (!hostPart) return 'MONGODB_URI must include a host';
+  if (scheme === 'mongodb+srv' && hostPart.split(':')[0].split('.').length < 3) {
+    return 'MONGODB_URI with mongodb+srv:// must use a fully qualified Atlas SRV host';
+  }
+  if (scheme === 'mongodb' && !hostPart.includes(':') && requireCredentials) {
+    return 'MONGODB_URI must include an explicit port for a direct (non-SRV) connection in production';
+  }
+  if (requireCredentials && !authority.includes('@')) {
+    return 'MONGODB_URI must include credentials in production';
+  }
+  const lowered = value.toLowerCase();
+  if (URI_PLACEHOLDER_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'MONGODB_URI still contains template placeholder text — replace it with the real Atlas connection string';
+  }
+  if (rest && !/^[/?#]/.test(rest)) return 'MONGODB_URI has an invalid path/options section';
+  return null;
+}
 
 export type Env = z.infer<typeof envSchema>;
 

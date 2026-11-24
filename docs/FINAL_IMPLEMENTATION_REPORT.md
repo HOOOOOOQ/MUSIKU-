@@ -1,11 +1,13 @@
 # MUSIKU+ — Final implementation report
 
 Date: 2026-11-24 · Branch: `arena/47dd4ee9-musiku` · Pull request: https://github.com/HOOOOOOQ/MUSIKU-/pull/2
-Code commit verified in CI: `e2917e7` · This report records **executed** results, not intentions.
+Code commit verified in CI: `b499117` (earlier sections reference `e2917e7` runs and remain accurate for that commit) · This report records **executed** results, not intentions.
 
 ## Verdict
 
-**MUSIKU+ is NOT production-ready.** The application code, CI pipelines and a real debug APK artifact now exist and pass, but the acceptance criteria that require live third-party systems are **unmet because no owner credentials exist in this environment**: MongoDB Atlas, Google OAuth, SMTP, Stripe, licensed media providers and Android release signing.
+**MUSIKU+ is NOT production-ready.** The application code, CI pipelines and a real debug APK artifact now exist and pass. Since the owner added the five repository secrets, **MongoDB Atlas is verified live in CI** (13/13 real-database integration tests, replica-set transactions) and **JWT rotation with reuse detection is verified** both hermetically and against that database. Still **unmet because they need owner-side action outside CI**: live Google sign-in on a device, SMTP delivery, Stripe charging, licensed media providers, Android release signing, and a deployed backend.
+
+> **Latest verified state (commit `b499117`, 2026-11-24).** Verify run [45357744692](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45357744692): configuration audit — required `MONGODB_URI`, distinct `JWT_SECRET`/`JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID` all detected, none missing (values never printed); backend build + **169 tests / 15 suites**; **Atlas integration LIVE — 13/13 passed** against `musiku_plus_ci_test` (`mongodb+srv`, transactions available, probe latency 3112 ms); admin tests + production build; `npm audit` 0 vulnerabilities. Android run [45357744794](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45357744794): format, analyze (`No issues found! (ran in 5.7s)`), tests across **9 files** all passing, debug APK **163,425,048 bytes** (`sha256 ceec803f…474f5`) uploaded as `musiku-plus-debug-apk` (artifact archive 84,326,972 bytes), **APK secret scan PASS** (221 archive members decompressed and compared against the three configured backend secrets — none embedded), `GOOGLE_WEB_CLIENT_ID` baked in from the repository secret, release signing skipped as unconfigured. Full evidence and the security audit: [OAUTH_CICD_VERIFICATION.md](OAUTH_CICD_VERIFICATION.md).
 
 Everything below distinguishes three states: **verified** (executed and observed), **implemented but unverified** (code exists, needs live credentials), **gap** (code does not yet exist; credentials alone will not fix it).
 
@@ -46,11 +48,12 @@ Run: https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205 (commit `e2917
 | Command | Result |
 |---|---|
 | `cd backend && npm run build` | PASS (TypeScript, 0 errors) |
-| `cd backend && npm test` | PASS — **15 suites, 146 tests** |
+| `cd backend && npm test` | PASS — **15 suites, 169 tests** (146 before the reuse-detection tests were added) |
 | `cd backend && npm audit --omit=dev --audit-level=high` | PASS — 0 vulnerabilities |
 | `cd admin && npm test` | PASS — 3 tests |
 | `cd admin && npm run build` | PASS — Next.js production build, 9 dashboard routes |
-| `cd backend && npm run test:atlas` | **BLOCKED** — startup validation correctly rejected absent `MONGODB_URI`/`JWT_SECRET`/`JWT_REFRESH_SECRET`. No real Atlas test has run. |
+| `cd backend && npm run test:atlas:integration` (local) | SKIPPED with reason — `13 skipped`: this sandbox has no `MONGODB_URI`/JWT secrets, and the pre-flight records that instead of faking a pass |
+| `npm run test:atlas:integration` in CI (run 45357744692) | **PASS — 13/13 live against MongoDB Atlas** (`musiku_plus_ci_test`, `mongodb+srv`, replica set, transactions exercised) |
 | `flutter analyze` / `flutter test` / `flutter build apk` locally | **NOT RUN** — no Flutter/Dart/Java/Android SDK here; pub.dev, dl.google.com, services.gradle.org and repo.maven.apache.org are outside the network allowlist. GitHub Actions is the authoritative Flutter execution and it passed. |
 
 ### 1.4 CI failures found and fixed (evidence the pipeline really runs)
@@ -122,13 +125,13 @@ Next.js 15 + TypeScript, 9 routes (dashboard, users, catalog, providers, subscri
 
 ## 3. Tests actually executed
 
-### 3.1 Backend — 146 tests, 15 suites, all passing locally and in CI
+### 3.1 Backend — 169 tests, 15 suites, all passing locally and in CI (plus 13 live Atlas integration tests)
 
 Auth/OAuth/security tests include: `uses Google library signature verification and configured audience`, `rejects invalid signature/library errors`, `links only verified existing email and records login/device`, `rejects unverified email linking`, `rejects suspended Google account`, `unique replay record rejects repeated exchange`, `refresh rotates tokens and revokes the old session`, `exactly one concurrent refresh succeeds`, `logout immediately invalidates access JWT through session binding`, `logout revokes the session`, `forgot + reset password flow works in development`, `forgot response does not disclose nonexistent account`, `change password requires the current password`, `registers a new user and returns tokens without password hash`, `rejects duplicate registration (409)`, `GET /api/auth/me returns profile + preferences`, `reports Google as unavailable without backend credentials and leaks no secret`,  plus API authorization/schema/pagination/crypto/provider regression suites, and a startup configuration suite (`accepts a minimal valid configuration`, `rejects unsupported EMAIL_PROVIDER values instead of ignoring them`, `requires SMTP credentials when EMAIL_PROVIDER=smtp`, `rejects a partial SMTP group`, `rejects a partial object storage group`, `rejects a non-redis REDIS_URL scheme`, `rejects unsupported payment gateways and partial payment groups`, `requires an Atlas SRV URI in production`), `SMTP enforces STARTTLS and includes actionable reset token`, `GitHub status maps only public safe fields and fixed main workflow URL`, and Stripe tests `refuses absent gateway credentials`, `rejects invalid webhook signature before persistence`, `valid signature for ignored event is acknowledged without DB access`, `tampered body with valid header rejected`.
 
 **These are unit/API tests with fake persistence and a mocked Google verifier boundary.** They prove logic, not integration. Expired-token and invalid-signature behaviour is exercised through the mocked `google-auth-library` verifier, not through Google.
 
-### 3.2 Flutter — 18 tests in 8 files, passing in CI (`flutter test`)
+### 3.2 Flutter — 25 tests in 9 files, passing in CI (`flutter test`)
 
 `api_test.dart` (record/list normalization, stable entity IDs), `google_auth_test.dart` (`Google button requires explicit backend confirmation`, `Google cancellation never calls backend`, `Google ID token exchanged for MUSIKU tokens only`), `http_client_test.dart` (`401 refresh rotates secure tokens and retries authorized request`), `navigation_test.dart` (`protected navigation redirects anonymous user to login`), `player_test.dart` (`preview player loads source and forwards transport controls`), `widgets_test.dart` (auth/register/reset modes, empty media list), `premium_notifications_test.dart` (`premium checkout reports unconfigured payment honestly`, `notification read, delete and preference controls call the API`), `playlists_test.dart` (`reorder helper converts Flutter indices into persisted track order`, `playlist identity helpers tolerate unpopulated references`, `playlist list shows owned and followed sections`, `owner management actions call the playlist API`, `shared playlist opens read-only through its token`).
 
@@ -197,17 +200,17 @@ Setup instructions: `docs/GITHUB_ACTIONS_SETUP.md`, `docs/GOOGLE_OAUTH_SETUP.md`
 
 | Criterion | Result |
 |---|---|
-| Google OAuth integrated (code path, backend verification) | implemented; **live verification pending owner credentials** |
+| Google OAuth integrated (code path, backend verification) | implemented and tested; `GOOGLE_CLIENT_ID` + `GOOGLE_WEB_CLIENT_ID` detected in CI and the web client is the verified ID-token audience; **live on-device sign-in pending console registration for the test certificate and a deployed backend** |
 | Email authentication functional | verified in tests; **live SMTP pending** |
-| MongoDB Atlas connected and tested | **NOT met** — no URI; schema/logic tests only |
+| MongoDB Atlas connected and tested | **met** — `MONGODB_URI` secret is configured; CI connected live to `musiku_plus_ci_test` and **13/13 integration tests passed** (connection, register/login, Google linking, profile, music library, anime watch history, playlists, data isolation, transactions) |
 | Provider configuration available | met (env validation, manager, docs); live provider calls not performed |
 | Flutter connected with backend | implemented (Dio, secure storage, single-flight refresh, device ID); **no deployed backend to point at** |
 | GitHub Actions workflow runs | **met** — both workflows green |
-| Debug APK produced | **met** — `musiku-plus-debug-apk`, 84,320,526 bytes (run 45348016082) |
-| Release APK produced when signing secrets exist | **NOT met** — secrets absent; release steps skipped, not faked |
+| Debug APK produced | **met** — `musiku-plus-debug-apk`; APK 163,425,048 bytes, artifact archive 84,326,972 bytes (run 45357744794); APK secret scan PASS |
+| Release APK produced when signing secrets exist | **NOT met** — the four `ANDROID_*` secrets are absent; release steps skipped, not faked, and the release variant is now left **unsigned** instead of falling back to the debug keystore |
 | Admin dashboard usable | builds and serves; live data requires deployed backend + Atlas |
-| Setup documentation complete | met — GOOGLE_OAUTH_SETUP, GITHUB_ACTIONS_SETUP, PROVIDER_CONFIGURATION, DEPLOYMENT, VERIFICATION |
-| No credentials leaked to GitHub | met — tracked-file scan clean; secrets only via GitHub Settings |
+| Setup documentation complete | met — GOOGLE_OAUTH_SETUP, GITHUB_ACTIONS_SETUP, **OAUTH_CICD_VERIFICATION**, PROVIDER_CONFIGURATION, DEPLOYMENT, VERIFICATION |
+| No credentials leaked to GitHub | met — tracked-file scan and full 24-commit history scan clean; secrets only via GitHub Settings; per-build APK scan proves none is embedded in the artifact |
 | All tests reported with real results | met — this document |
 
-Because Atlas, Google, SMTP, Stripe and release signing are unverified, the product must not be described as complete or production-ready.
+Atlas is now verified live. Because on-device Google sign-in, SMTP, Stripe, licensed media and release signing remain unverified — and no backend is deployed — the product must not be described as complete or production-ready.

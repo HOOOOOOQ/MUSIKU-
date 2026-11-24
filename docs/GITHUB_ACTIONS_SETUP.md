@@ -7,7 +7,9 @@ Two workflows run on this repository:
 | **Android APK** | `.github/workflows/android-build.yml` | `config-audit`, `backend`, `atlas-integration`, `admin`, `android` (debug APK, optional signed release) |
 | **Verify MUSIKU+** | `.github/workflows/verify.yml` | `backend`, `admin` (Node-only gate, kept for fast feedback) |
 
-Both trigger on pushes to `main`, on pull requests, and manually via `workflow_dispatch`. The Android workflow uses a concurrency group (`android-${{ github.ref }}`, `cancel-in-progress: true`), so pushing a new commit cancels the superseded run.
+Both trigger on pushes to `main`, on pull requests, and manually via `workflow_dispatch`. Each workflow uses a concurrency group (`android-${{ github.ref }}` / `verify-${{ github.ref }}`, `cancel-in-progress: true`), so pushing a new commit cancels the superseded run.
+
+Action versions are pinned to current Node-24 majors: `actions/checkout@v7`, `actions/setup-node@v7`, `actions/setup-java@v6`, `actions/upload-artifact@v7`, `subosito/flutter-action@v2`. (`upload-artifact@v4` still works but emits a *Node.js 20 is deprecated* warning; v7 also supports `archive: false` for direct single-file uploads, which is deliberately **not** used here because the required artifact name `musiku-plus-debug-apk` would be replaced by the file name.)
 
 ## 1. Secrets that already exist
 
@@ -62,9 +64,16 @@ Without `API_BASE_URL`/`API_URL` the APK embeds the deliberately non-functional 
 
 1. Open the run. Every job shows per-step conclusions; a green run means the steps really executed.
 2. The run's **Summary** page contains: the configuration audit table, the Atlas pre-flight outcome, debug APK path/size/SHA-256, whether `API_BASE_URL` and `GOOGLE_WEB_CLIENT_ID` were baked in, the APK secret-scan result, and the release-signing status.
-3. Download **`musiku-plus-debug-apk`** from the **Artifacts** section of a successful run (a ZIP containing `app-debug.apk`). With signing configured on a non-PR run, **`musiku-plus-release-apk`** also appears.
-4. Artifact output paths in the workspace: `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`.
-5. A failed run uploads **`musiku-plus-android-build-logs`** (`mobile/ci-logs/*.log`: toolchain, pub get, format, analyze, tests, build). `scripts/ci_notice.py` also emits an annotation anchored at the failing test or the Gradle `FAILURE` block, because GitHub truncates long annotations and keeps the head.
+3. The same conclusions are emitted as **annotations**, so they can be read without downloading the log archive (which automation often cannot reach):
+   ```sh
+   JOB=$(gh run view <run-id> --json jobs --jq '.jobs[] | select(.name=="MongoDB Atlas integration") | .databaseId')
+   gh api repos/HOOOOOOQ/MUSIKU-/check-runs/$JOB/annotations --jq '.[].message'
+   gh api repos/HOOOOOOQ/MUSIKU-/actions/runs/<run-id>/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
+   ```
+   Example observed output: `Atlas integration ran LIVE against musiku_plus_ci_test | suites: 1 passed, 1 total | tests: 13 passed, 13 total | uri scheme: mongodb+srv | transactions: yes | latency: 3112 ms` and `APK secret scan :: PASS — 221 members decompressed, 3 secret values compared, 4 credential patterns checked, 163,425,048 byte artifact; no backend secret embedded`.
+4. Download **`musiku-plus-debug-apk`** from the **Artifacts** section of a successful run (a ZIP containing `app-debug.apk`). With signing configured on a non-PR run, **`musiku-plus-release-apk`** also appears.
+5. Artifact output paths in the workspace: `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`.
+6. A failed run uploads **`musiku-plus-android-build-logs`** (`mobile/ci-logs/*.log`: toolchain, pub get, format, analyze, tests, build). `scripts/ci_notice.py` also emits an annotation anchored at the failing test or the Gradle `FAILURE` block, because GitHub truncates long annotations and keeps the head.
 
 ## 5. Release signing (optional, added later)
 

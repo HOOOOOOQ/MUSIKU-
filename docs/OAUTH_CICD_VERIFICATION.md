@@ -1,7 +1,7 @@
 # OAuth + CI/CD verification report — MUSIKU+
 
 **Date:** 2026-11-24 (UTC) · **Branch:** `arena/47dd4ee9-musiku` · **PR:** [#2](https://github.com/HOOOOOOQ/MUSIKU-/pull/2)
-**Evidence commits:** `4c25039` (Verify run **45356394429**, Android run **45356394418**)
+**Evidence commits:** `b499117` (Verify run **45357744692**, Android run **45357744794**)
 
 This report records what was actually executed and what was observed, not what is intended. Every claim below is tied to a CI run, a command, or a test file. Where something could not be verified, it is listed as a blocker — nothing is reported as passing that did not run.
 
@@ -11,14 +11,14 @@ This report records what was actually executed and what was observed, not what i
 
 | Area | Status | Evidence |
 |---|---|---|
-| Required GitHub secrets detected in CI (no values printed) | **verified** — all four required items detected, none missing | Verify run 45356394429, `Configuration audit` job annotation |
+| Required GitHub secrets detected in CI (no values printed) | **verified** — all four required items detected, none missing | Verify run 45357744692, `Configuration audit` job annotation |
 | Google OAuth — web client used as the verified ID-token audience | **verified in code and tests** (backend + Flutter wiring); **live sign-in on a device still pending** | `tests/unit/googleIdentity.test.ts` (15 tests), `tests/atlas/atlasIntegration.test.ts` |
 | Google OAuth — Android client ID (`com.musikuplus.app` + SHA-1) | **secret present**; console registration is an owner action and cannot be observed from CI | audit annotation, `docs/GOOGLE_OAUTH_SETUP.md` |
-| JWT access + refresh with distinct secrets, rotation, reuse detection | **verified** — hermetic and live-database tests | 158 backend tests; Atlas suite 13/13 live |
-| MongoDB Atlas connection from CI | **verified live** — `mongodb+srv`, replica set, 13/13 integration tests passed | Verify run 45356394429, `MongoDB Atlas integration` annotation |
-| Flutter `analyze` / `test` | **verified** — analyze clean, 25 tests pass | Android run 45356394418, steps 7–8 |
-| Debug APK build + artifact | **verified** — `musiku-plus-debug-apk` | Android run 45356394418, step 12 |
-| No backend secret inside the APK | **verified** — scan step passed | Android run 45356394418, step 10 |
+| JWT access + refresh with distinct secrets, rotation, reuse detection | **verified** — hermetic and live-database tests | 169 backend tests; Atlas suite 13/13 live |
+| MongoDB Atlas connection from CI | **verified live** — `mongodb+srv`, replica set, 13/13 integration tests passed | Verify run 45357744692, `MongoDB Atlas integration` annotation |
+| Flutter `analyze` / `test` | **verified** — `No issues found! (ran in 5.7s)`, 9 test files, all tests passed | Android run 45357744794, steps 7–8 annotations |
+| Debug APK build + artifact | **verified** — `musiku-plus-debug-apk`, APK 163,425,048 bytes | Android run 45357744794, steps 9/12 annotations |
+| No backend secret inside the APK | **verified** — 221 archive members decompressed and compared, no finding | Android run 45357744794, step 10 annotation |
 | Signed release APK | **not configured** — debug artifact only, release left unsigned | audit annotation (optional items: none detected) |
 | Live Google sign-in, SMTP delivery, Stripe charge, licensed media | **not verified** — requires owner-side setup outside CI | §8 blockers |
 
@@ -28,7 +28,7 @@ This report records what was actually executed and what was observed, not what i
 
 `scripts/audit_ci_config.py` runs as the `Configuration audit` job of `verify.yml` and again in `android-build.yml` history. It inspects each candidate from the environment and reports **presence and shape only** — `present`, `missing`, `placeholder`, `invalid scheme`, `meets 32-character minimum`, `access and refresh use different keys`. It never echoes, stores, uploads or exposes a value; the only outputs are booleans in `$GITHUB_OUTPUT` plus a Markdown table in the job summary and a `::notice` annotation.
 
-Observed annotation for run **45356394429** (job 138315166488):
+Observed annotation for run **45357744692** (`Configuration audit` job):
 
 ```
 [notice] CI configuration :: required detected: MONGODB_URI, JWT_SECRET/JWT_REFRESH_SECRET,
@@ -37,7 +37,7 @@ Observed annotation for run **45356394429** (job 138315166488):
 
 | Name | Kind | Detected | Shape check |
 |---|---|---|---|
-| `MONGODB_URI` | secret | **yes** | `mongodb+srv` scheme (TLS), not a placeholder |
+| `MONGODB_URI` | secret | **yes** | `mongodb+srv` scheme (TLS), not a placeholder, passes `validateMongoUri` |
 | `JWT_SECRET` | secret | **yes** | ≥ 32 characters |
 | `JWT_REFRESH_SECRET` | secret | **yes** | ≥ 32 characters, **different** from `JWT_SECRET` |
 | `GOOGLE_CLIENT_ID` | secret | **yes** | ends with `.apps.googleusercontent.com` |
@@ -80,7 +80,7 @@ Account handling (`authService`): `googleId` has a unique sparse index; a Google
 
 ### 3.2 Test evidence
 
-- `backend/tests/unit/googleIdentity.test.ts` — 15 tests: web-client audience accepted, Android-client fallback, opt-in Android audience, different client rejected, unconfigured rejected, invalid `exp`/`aud`/`iss`/`email_verified`/`email`/`sub`, library error text not leaked. **PASS** in CI (Verify run 45356394429, backend job step 6).
+- `backend/tests/unit/googleIdentity.test.ts` — 15 tests: web-client audience accepted, Android-client fallback, opt-in Android audience, different client rejected, unconfigured rejected, invalid `exp`/`aud`/`iss`/`email_verified`/`email`/`sub`, library error text not leaked. **PASS** in CI (Verify run 45357744692, backend job).
 - `backend/tests/unit/oauthLinking.test.ts` — verified-email linking, refusal of unverified linking, suspended account, replay rejection. **PASS**.
 - `backend/tests/atlas/atlasIntegration.test.ts` — with a live Atlas database: Google linking persisted, no duplicate account for the same verified email, replay rejected by the unique index. **PASS live in CI (13/13)**. The Google verifier itself is mocked in this suite because Google's JWKS endpoint is not reachable from the runner; that is stated here rather than presented as a live OAuth exchange.
 - `backend/tests/integration/auth.test.ts` — `GET /api/auth/providers` reports Google unavailable when the backend has no client ID and leaks no secret.
@@ -119,7 +119,7 @@ Whether the two client IDs belong to the same Google project, and whether the An
 | Rejected tokens | Expired, wrong-secret, refresh-presented-as-access, revoked session, unknown `sid` | unit + integration + Atlas tests |
 | Expiry enforcement | `exp` checked by `jsonwebtoken` and again against the session's `expiresAt` | `authService.refresh`, `middleware/auth.ts` |
 
-Backend test totals: **15 suites, 158 tests, all passing** locally and in CI (Verify run 45356394429, `Backend build and tests`).
+Backend test totals: **15 suites, 169 tests, all passing** locally and in CI (Verify run 45357744692, `Backend build and tests`).
 
 Known limitation: `middleware/auth.ts` accepts a `sid`-less token only when `NODE_ENV=test`; production deployments must always issue session-bound tokens.
 
@@ -127,19 +127,19 @@ Known limitation: `middleware/auth.ts` accepts a `sid`-less token only when `NOD
 
 ## 5. MongoDB Atlas status
 
-Observed annotation for the `MongoDB Atlas integration` job of run **45356394429** (job 138315166614):
+Observed annotation for the `MongoDB Atlas integration` job of run **45357744692**:
 
 ```
 [notice] Atlas integration :: Atlas integration ran LIVE against musiku_plus_ci_test |
          suites: 1 passed, 1 total | tests: 13 passed, 13 total |
-         uri scheme: mongodb+srv | transactions: yes | latency: 4054 ms
+         uri scheme: mongodb+srv | transactions: yes | latency: 3112 ms
 ```
 
 So: the `MONGODB_URI` secret **works from GitHub-hosted runners**, the connection uses TLS (`mongodb+srv`), the cluster is a replica set (multi-document transactions available), the database user is authorized on the isolated test database, and all 13 integration tests **passed against real MongoDB** — not skipped, not mocked.
 
 Connection hardening (`backend/src/config/database.ts`):
 
-- URI validated at startup by zod (scheme, credentials) — an invalid URI fails fast instead of hanging;
+- URI validated at startup: `validateMongoUri()` rejects an empty value, whitespace, a non-`mongodb(+srv)` scheme, a missing host, an SRV host that is not fully qualified, unreplaced template text (`USER:PASSWORD`, `your-cluster`, `<cluster>`, …) and — in production — a URI without credentials; zod additionally requires `mongodb+srv` in production. The failure message names the problem without echoing the URI, so a bad value fails fast at boot instead of hanging in server selection;
 - pooling: `maxPoolSize` 20, `minPoolSize` 2, `serverSelectionTimeoutMS` 10 s, socket timeouts, `retryWrites`, `retryReads`, `compressors: ['zlib']`;
 - bounded retry with exponential backoff (5 attempts, 1 s → 8 s cap) — **no uncontrolled crash loop**; a final failure throws a single actionable error;
 - lifecycle listeners (`disconnected`, `reconnected`, `error`, `close`, `reconnectFailed`) log through the redacted URI helper (`redactMongoUri` prints only host, database and scheme — never credentials);
@@ -160,14 +160,14 @@ Indexes/health · unique email index (duplicate-key 11000) · register + login w
 
 ## 6. Flutter analyze and test status
 
-Android run **45356394418**, job `Android debug APK`:
+Android run **45357744794**, job `Android debug APK`:
 
-| Step | Result |
-|---|---|
-| 5 Resolve packages (`flutter pub get`) | success |
-| 6 Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success |
-| 7 Analyze (`flutter analyze`) | success — no issues |
-| 8 Test (`flutter test`) | success — **25 tests** in 9 files |
+| Step | Result | Annotation observed |
+|---|---|---|
+| 5 Resolve packages (`flutter pub get`) | success | — |
+| 6 Check formatting (`dart format --output=none --set-exit-if-changed lib test`) | success | — |
+| 7 Analyze (`flutter analyze`) | success | `[notice] Flutter analyzer :: No issues found! (ran in 5.7s)` |
+| 8 Test (`flutter test`) | success | `[notice] Flutter tests :: PASS … | test files: 9` (25 test declarations across those 9 files) |
 
 New in this round: `mobile/test/build_config_test.dart` (7 tests) covering `API_BASE_URL` precedence, the legacy `API_URL` alias, trailing-slash normalisation, whitespace handling, the deliberately non-functional `example.invalid` fallback, injectable base URL, and the assertion that no OAuth client secret or database credential is read at build time.
 
@@ -177,15 +177,28 @@ New in this round: `mobile/test/build_config_test.dart` (7 tests) covering `API_
 
 | Item | Value |
 |---|---|
-| Workflow / run | `android-build.yml` → run **45356394418** (commit `4c25039`) |
-| Artifact name | **`musiku-plus-debug-apk`** |
+| Workflow / run | `android-build.yml` → run **45357744794** (commit `b499117`) |
+| Artifact name | **`musiku-plus-debug-apk`** (artifact id 14902769177) |
 | Source path | `mobile/build/app/outputs/flutter-apk/app-debug.apk` |
 | Download | Run page → **Artifacts** → `musiku-plus-debug-apk` (ZIP containing `app-debug.apk`) |
-| Size / SHA-256 | Recorded in the run's **Summary** page (`Record APK metadata` step) |
+| APK file size | **163,425,048 bytes** (debug APK: Dart VM + all ABIs) |
+| Artifact archive size | **84,326,972 bytes** (GitHub compresses the APK into the artifact ZIP) |
+| SHA-256 | `ceec803ff18352ac19b074997dd8da1ae9118e60d07ebd05dd2e4ed2a3e474f5` |
+| Baked-in public config | `GOOGLE_WEB_CLIENT_ID` **present** (from the repository secret) · `API_BASE_URL` **not set**, so the non-functional `https://api.example.invalid/api` default is embedded |
 | Signing | Debug (the runner's ephemeral debug keystore) |
-| Release | **Not configured** — the four `ANDROID_*` secrets are absent, so the release steps were skipped and the summary states that release signing is not configured |
+| Release | **Not configured** — steps 14–16 skipped because the four `ANDROID_*` secrets are absent; the summary states that release signing is not configured |
+| Cleanup | `Remove signing material` ran (`success`); diagnostic logs skipped (no failure) |
 
 Release-signing hardening: `mobile/android/app/build.gradle.kts` no longer falls back to the debug keystore. Without owner-supplied `key.properties` material the release variant stays **unsigned** — a debug-keyed artifact can never be mistaken for a distributable build. When all four `ANDROID_*` secrets exist and the event is not a pull request, `scripts/configure_signing.py` decodes the keystore into `$RUNNER_TEMP` (`0600`, `umask 077`), writes an escaped `key.properties`, and both files are removed by a `trap` and an `if: always()` cleanup step. Keystores and passwords are never artifacts and never printed.
+
+Observed scan annotation for run 45357744794:
+
+```
+[notice] APK secret scan :: PASS — 221 members decompressed, 3 secret values compared,
+         4 credential patterns checked, 163,425,048 byte artifact; no backend secret embedded
+```
+
+(3 secret values were compared because only `MONGODB_URI`, `JWT_SECRET` and `JWT_REFRESH_SECRET` exist as repository secrets today; the remaining candidates — Google client secret, payment, SMTP, storage, licensed-media, build token, admin password — are not configured and are reported as skipped rather than silently ignored.)
 
 Secret-leak proof (`scripts/scan_apk_secrets.py`, step 10): the built APK is treated as a ZIP, **every member is decompressed** (Dart constants live in `assets/flutter_assets/kernel_blob.bin` for debug and `lib/*/libapp.so` for release, both compressed) and searched for the raw bytes of each backend secret supplied to the job (`MONGODB_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_SECRET`, payment/SMTP/storage/licensed-media keys, `GITHUB_BUILD_TOKEN`, `ADMIN_PASSWORD`) plus structural patterns (`mongodb(+srv)://…`, `GOCSPX-…`, AWS-style secret assignments, PEM private keys) and packaged signing material (`key.properties`, `*.jks`, `*.keystore`, `*.p12`, `*.env`). Any finding fails the build. Only booleans and member names are printed. The scanner was validated against a deliberately leaky fixture locally: it reported the JWT value, the Mongo connection-string pattern and the packaged `key.properties`, and exited 1.
 
@@ -245,7 +258,7 @@ Nothing real was ever committed, and no credential value was ever exchanged in t
 
 ```sh
 # Backend (hermetic; no credentials needed)
-cd backend && npm ci && npm run build && npm test        # 15 suites, 158 tests
+cd backend && npm ci && npm run build && npm test        # 15 suites, 169 tests
 
 # Atlas integration (needs MONGODB_URI + both JWT secrets; skips honestly without them)
 cd backend && npm run atlas:preflight                    # probe only, always exits 0
@@ -256,11 +269,13 @@ python3 scripts/audit_ci_config.py                       # presence + shape tabl
 python3 scripts/scan_apk_secrets.py mobile/build/app/outputs/flutter-apk/app-debug.apk
 
 # CI evidence
-gh run view 45356394429 --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'   # Verify MUSIKU+
-gh run view 45356394418 --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'   # Android APK
-# Annotations (readable without downloading logs):
-JOB=$(gh run view 45356394429 --json jobs --jq '.jobs[] | select(.name=="MongoDB Atlas integration") | .databaseId')
+gh run view 45357744692 --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'   # Verify MUSIKU+
+gh run view 45357744794 --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'   # Android APK
+# Annotations (readable without downloading the log archive, which this
+# environment cannot reach):
+JOB=$(gh run view 45357744692 --json jobs --jq '.jobs[] | select(.name=="MongoDB Atlas integration") | .databaseId')
 gh api repos/HOOOOOOQ/MUSIKU-/check-runs/$JOB/annotations --jq '.[].message'
+gh api repos/HOOOOOOQ/MUSIKU-/actions/runs/45357744794/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
 ```
 
 Related documents: [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) · [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md) · [VERIFICATION.md](VERIFICATION.md) · [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md) · [DEPLOYMENT.md](DEPLOYMENT.md)

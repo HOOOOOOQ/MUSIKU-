@@ -36,8 +36,8 @@ jobs:
       API_BASE_URL: ${{ vars.API_BASE_URL || vars.API_URL }}
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -72,7 +72,8 @@ jobs:
             python3 ../scripts/ci_notice.py ci-logs/tests.log 'Flutter tests'
             exit "$status"
           fi
-          summary=$(grep -oE '\+[0-9]+( ~[0-9]+)?: (All tests passed|No tests ran)' ci-logs/tests.log | tail -1)
+          # Flutter colourises its reporter output, so strip ANSI escapes before matching.
+          summary=$(sed 's/\x1b\[[0-9;]*m//g' ci-logs/tests.log | grep -oE '\+[0-9]+( ~[0-9]+)?: (All tests passed|No tests ran)' | tail -1)
           files=$(ls test | grep -c '_test\.dart$')
           echo "::notice title=Flutter tests::PASS — ${summary:-see log} | test files: ${files}"
       - name: Build debug APK
@@ -119,7 +120,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Annotation, so the result stays readable through the check-run API.
           echo "::notice title=Debug APK::musiku-plus-debug-apk ${size} bytes sha256=${digest} | ${api_state} | ${google_state}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: musiku-plus-debug-apk
           path: mobile/build/app/outputs/flutter-apk/app-debug.apk
@@ -174,7 +175,7 @@ jobs:
           PAYMENT_SECRET_KEY: ${{ secrets.PAYMENT_SECRET_KEY }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: python3 ../scripts/scan_apk_secrets.py build/app/outputs/flutter-apk/app-release.apk | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.signing.outputs.ready == 'true'
         with:
           name: musiku-plus-release-apk
@@ -185,7 +186,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/musiku-release.jks" android/key.properties
       - name: Upload diagnostic logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: musiku-plus-android-build-logs
           path: mobile/ci-logs/*.log

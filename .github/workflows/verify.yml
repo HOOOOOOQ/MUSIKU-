@@ -31,7 +31,7 @@ jobs:
       api_base_url_ready: ${{ steps.audit.outputs.api_base_url_ready }}
       all_required_ready: ${{ steps.audit.outputs.all_required_ready }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Reports presence and shape only; no value is echoed, stored or uploaded.
       - name: Verify required configuration is present (values are never printed)
         id: audit
@@ -59,8 +59,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -82,8 +82,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -121,8 +121,8 @@ jobs:
       run:
         working-directory: admin
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

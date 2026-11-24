@@ -1,6 +1,6 @@
 # Verification and acceptance report
 
-Date: 2026-11-24 · Branch `arena/47dd4ee9-musiku` · Verified code commit `e2917e7` · Companion narrative: [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md).
+Date: 2026-11-24 · Branch `arena/47dd4ee9-musiku` · Verified code commit `b499117` · Companion narrative: [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md) · Credential/CI evidence: [OAUTH_CICD_VERIFICATION.md](OAUTH_CICD_VERIFICATION.md).
 
 This is a record of actual execution. It is **not** an assertion that all acceptance criteria are met.
 
@@ -11,12 +11,12 @@ This is a record of actual execution. It is **not** an assertion that all accept
 | CI `android-build.yml` run [45348016082](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016082) | **SUCCESS** | `pull_request` event; debug only |
 | ↳ `dart format --set-exit-if-changed lib test` | PASS | formatting only |
 | ↳ `flutter analyze` | PASS — "No issues found! (ran in 6.6s)" | static analysis, not runtime |
-| ↳ `flutter test` | PASS — **18 tests** in 8 files | widget/unit tests with fakes (API, identity, player, clipboard); no device, no Play services |
-| ↳ `flutter build apk --debug` + artifact upload | PASS — `musiku-plus-debug-apk`, 84,320,526 bytes | debug-signed; embeds placeholder `API_URL` because the repository variable is unset |
+| ↳ `flutter test` | PASS — **18 tests** in 8 files (run 45348016082); **25 tests** in 9 files after `build_config_test.dart` was added (run 45356394418 and later) | widget/unit tests with fakes (API, identity, player, clipboard); no device, no Play services |
+| ↳ `flutter build apk --debug` + artifact upload | PASS — `musiku-plus-debug-apk`; APK file 163,425,048 bytes, artifact archive 84,326,972 bytes (run 45357744794) | debug-signed; embeds the public `GOOGLE_WEB_CLIENT_ID` but still the placeholder API origin because the repository variable is unset |
 | ↳ Release signing check / release build / release artifact | SKIPPED — `ready=false` | four signing secrets absent and PR event; **no signed release APK exists** |
 | CI `verify.yml` run [45348016205](https://github.com/HOOOOOOQ/MUSIKU-/actions/runs/45348016205) | **SUCCESS** (green on every commit of this branch) | backend `npm ci`/build/test + admin `npm ci`/test/build on Node 22 |
 | Backend `npm run build` (local) | PASS | TypeScript compilation |
-| Backend `npm test` (local) | PASS — **15 suites, 146 tests** | unit + Supertest flows against in-memory model fakes and a mocked Google verifier; no real Atlas, no real Google/SMTP/Stripe |
+| Backend `npm test` (local + CI) | PASS — **15 suites, 169 tests** | unit + Supertest flows against in-memory model fakes and a mocked Google verifier; no real Atlas, no real Google/SMTP/Stripe |
 | Mongoose schema/index/TTL contract tests | PASS (included above) | declarations, not server-side index creation |
 | Stripe webhook signature tests | PASS (included above) | signature math against fake bodies; no live charge |
 | SMTP transport test | PASS (included above) | mocked transporter; no message was delivered |
@@ -26,7 +26,10 @@ This is a record of actual execution. It is **not** an assertion that all accept
 | Admin `npm run build` (local + CI) | PASS | Next.js production build of 9 dashboard routes |
 | `npm audit --omit=dev --audit-level=high` (backend) | PASS — 0 vulnerabilities | dependency advisories only, not a code security audit |
 | Tracked-file credential scan | PASS — no private keys, live secret keys, Atlas URIs with passwords, Google API keys, GitHub PATs or Slack tokens | one obvious unit-test placeholder was renamed to `unit-only-payment-key` |
-| Backend `npm run test:atlas` | **BLOCKED** | startup validation rejected absent `MONGODB_URI`/`JWT_SECRET`/`JWT_REFRESH_SECRET`; no real Atlas test has run |
+| Backend `npm run test:atlas:integration` (CI, run 45357744692) | PASS — **13/13 live tests against MongoDB Atlas** (`musiku_plus_ci_test`, `mongodb+srv`, replica set, probe latency 3112 ms) | Real database, real indexes, real transactions; the Google verifier is mocked because Google's JWKS endpoint is unreachable from the runner, so this is not a live OAuth exchange |
+| Backend `npm run test:atlas:integration` (local) | SKIPPED with reason — `13 skipped` | No `MONGODB_URI`/JWT secrets in this sandbox; the pre-flight records the reason and the suite reports a skip, never a pass |
+| CI configuration audit (`scripts/audit_ci_config.py`) | PASS — required detected: `MONGODB_URI`, `JWT_SECRET`/`JWT_REFRESH_SECRET` (different), `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_ID`; missing: none | Presence and shape only; optional items (signing, `API_BASE_URL` variable, build token) are **not** configured |
+| APK secret scan (`scripts/scan_apk_secrets.py`, CI step) | PASS — every archive member decompressed and compared against the backend secrets supplied to the job | Proves no `MONGODB_URI`/JWT/credential material is embedded in the debug APK |
 | Local `flutter analyze` / `flutter test` / `flutter build apk` | **NOT RUN** | no Flutter/Dart/Java/Android SDK in this sandbox; pub.dev, dl.google.com, services.gradle.org and repo.maven.apache.org are outside the network allowlist. GitHub Actions is the authoritative Flutter execution. |
 
 ## CI history (real failures, real fixes)
@@ -48,6 +51,11 @@ This is a record of actual execution. It is **not** an assertion that all accept
 | 45346690412 | failed at analyze | block-body conversion deepened indentation, so the formatter split an `if (mounted) setState(...)`; braces added |
 | 45347277654 | failed at test | `AuthScreen` watched the new Google-capability provider unconditionally, so widget tests issued a real HTTP request during mount → capability request now only when `GOOGLE_WEB_CLIENT_ID` is built in; `scripts/ci_notice.py` added so failing-test details survive GitHub's annotation truncation |
 | 45348016082 | **success** | format, analyze (no issues), 18 tests, debug APK artifact 84,320,526 bytes |
+| 45349000598 / 45350049824 | **success** | docs-only commits `14d78a2` / `81bd64a`; artifact unchanged at 84,320,526 bytes |
+| 45355158958 (verify) | **failure** at the Atlas report step | `report_atlas_outcome.py` crashed on jest `PASS`/`FAIL` lines (`re.findall` returned tuples); the integration suite itself had passed → parser fixed and the reporter made non-fatal |
+| 45356394418 / 45356394429 | **success** | Android: format, analyze, 25 tests, debug APK, APK secret scan PASS, release skipped. Verify: audit + backend tests + **Atlas live 13/13** + admin |
+| 45357744692 / 45357744794 (`b499117`) | **success** | Verify: audit (all required secrets detected, none missing), backend **169 tests**, **Atlas live 13/13** (`mongodb+srv`, transactions, 3112 ms probe), admin build. Android: format, analyze (`No issues found! (ran in 5.7s)`), tests (9 files, all passed), debug APK **163,425,048 bytes** (`sha256 ceec803f…474f5`), **APK secret scan PASS** (221 members decompressed, 3 secret values compared), artifact `musiku-plus-debug-apk` **84,326,972 bytes**, release steps skipped, signing material removed |
+| 45357744692 (verify) | **success** | same four jobs green at `b499117`; Atlas live 13/13 (probe latency 3112 ms) |
 
 Runs 45339134473, 45339249111, 45339775474, 45340564428 and 45342291344 were superseded/cancelled by the workflow concurrency group when newer commits were pushed (`gh run cancel` returns `403 Resource not accessible by integration`).
 
