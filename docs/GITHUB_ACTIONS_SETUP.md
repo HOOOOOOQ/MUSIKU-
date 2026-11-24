@@ -70,7 +70,7 @@ Without `API_BASE_URL`/`API_URL` the APK embeds the deliberately non-functional 
    gh api repos/HOOOOOOQ/MUSIKU-/check-runs/$JOB/annotations --jq '.[].message'
    gh api repos/HOOOOOOQ/MUSIKU-/actions/runs/<run-id>/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
    ```
-   Example observed output: `Atlas integration ran LIVE against musiku_plus_ci_test | suites: 1 passed, 1 total | tests: 13 passed, 13 total | uri scheme: mongodb+srv | transactions: yes | latency: 3112 ms` and `APK secret scan :: PASS — 221 members decompressed, 3 secret values compared, 4 credential patterns checked, 163,425,048 byte artifact; no backend secret embedded`.
+   Example observed output: `Atlas integration ran LIVE against musiku_plus_ci_test | suites: 1 passed, 1 total | tests: 13 passed, 13 total | uri scheme: mongodb+srv | transactions: yes | latency: 2924 ms` and `APK secret scan :: PASS — 221 members decompressed, 3 secret values compared, 4 credential patterns checked, 163,425,048 byte artifact; no backend secret embedded`.
 4. Download **`musiku-plus-debug-apk`** from the **Artifacts** section of a successful run (a ZIP containing `app-debug.apk`). With signing configured on a non-PR run, **`musiku-plus-release-apk`** also appears.
 5. Artifact output paths in the workspace: `mobile/build/app/outputs/flutter-apk/app-debug.apk` and `app-release.apk`.
 6. A failed run uploads **`musiku-plus-android-build-logs`** (`mobile/ci-logs/*.log`: toolchain, pub get, format, analyze, tests, build). `scripts/ci_notice.py` also emits an annotation anchored at the failing test or the Gradle `FAILURE` block, because GitHub truncates long annotations and keeps the head.

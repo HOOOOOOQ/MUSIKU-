@@ -73,7 +73,7 @@ jobs:
             exit "$status"
           fi
           # Flutter colourises its reporter output, so strip ANSI escapes before matching.
-          summary=$(sed 's/\x1b\[[0-9;]*m//g' ci-logs/tests.log | grep -oE '\+[0-9]+( ~[0-9]+)?: (All tests passed|No tests ran)' | tail -1)
+          summary=$(tr '\r' '\n' < ci-logs/tests.log | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '\+[0-9]+( *-[0-9]+)?( *~[0-9]+)?: (All tests passed|No tests ran)' | tail -1)
           files=$(ls test | grep -c '_test\.dart$')
           echo "::notice title=Flutter tests::PASS — ${summary:-see log} | test files: ${files}"
       - name: Build debug APK
